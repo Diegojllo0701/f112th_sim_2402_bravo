@@ -13,6 +13,9 @@ from launch_ros.actions import Node
 def generate_launch_description():
 
 
+    # Include the robot_state_publisher launch file, provided by our own package. Force sim time to be enabled
+    # !!! MAKE SURE YOU SET THE PACKAGE NAME CORRECTLY !!!
+
     package_name='f112th_sim_2402_bravo' #<--- CHANGE ME
 
     rsp = IncludeLaunchDescription(
@@ -39,19 +42,19 @@ def generate_launch_description():
                 )]), launch_arguments={'use_sim_time': 'true'}.items()
     )
 
-
     twist_mux_params = os.path.join(get_package_share_directory(package_name),'config','twist_mux.yaml')
     
     twist_mux_node = Node(package='twist_mux', 
                     executable='twist_mux',
                     parameters=[twist_mux_params,{'use_sim_time': True}],
-                    remappings=[('/cmd_vel_out','/diff_cont/cmd_vel_unstamped')]
+                    remappings=[('/cmd_vel_out','/cmd_vel')]
     )
 
-# Launch them all!
+    # Launch them all!
     return LaunchDescription([
         rsp,
+        gazebo,
+        spawn_entity,
         joystick,
         twist_mux_node,
-        gazebo,
-        spawn_entity])
+    ])
