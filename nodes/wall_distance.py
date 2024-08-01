@@ -54,11 +54,11 @@ class AngleDistancesReader(Node):
             angle_diff_rad = math.radians(90 - 80)
             sin_80 = math.sin(angle_80_rad)
             cos_diff = math.cos(angle_diff_rad)
-
+            AC=3
             # Compute alpha using the given formula
             alpha = math.atan((dist_80 * cos_diff - dist_90) / (dist_80 * sin_80))
             AB = dist_90 * math.cos(alpha)
-            CD = AB + 3 * math.sin(alpha)
+            CD = AB + AC * math.sin(alpha)
             self.get_logger().info(f'Calculated alpha: {alpha} radians, {math.degrees(alpha)} degrees')
         else:
             self.get_logger().warn('Distances for angles 80 or 90 not found.')
