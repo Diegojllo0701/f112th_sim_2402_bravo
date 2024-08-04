@@ -2,14 +2,14 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32
-from std_msgs.msg import Float32MultiArray
+from f112th_sim_2402_bravo.msg import AngleDistance  # Asegúrate de que la importación sea correcta
 import math
 
 class AngleDistancesReader(Node):
     def __init__(self):
         super().__init__('angle_distances_reader')
         self.subscription = self.create_subscription(
-            Float32MultiArray,
+            AngleDistance,
             'angle_distances',
             self.angle_distances_callback,
             10)
@@ -18,55 +18,41 @@ class AngleDistancesReader(Node):
 
     def angle_distances_callback(self, msg):
         self.get_logger().info('Received angle distances message.')
-        # Define the angles we are interested in
-        angles_to_check = [100, 90]
         
-        # Extract the distances for the specified angles and calculate CD distance
-        CD = self.get_CD_distance(msg, angles_to_check)
-        
-        # Log the results and publish the CD distance
-        if CD is not None:
-            self.get_logger().info(f'CD distance to wall: {CD}')
-            self.publish_CD_distance(CD)
+        # Use distances_right values as a and b
+        if len(msg.distances_right) >= 2:
+            a = msg.distances_right[0]
+            b = msg.distances_right[1]
+            CD = self.calculate_CD_distance(a, b)
+            
+            if CD is not None:
+                self.get_logger().info(f'CD distance to wall: {CD}')
+                self.publish_CD_distance(CD)
+            else:
+                self.get_logger().warn('Could not calculate CD distance.')
         else:
-            self.get_logger().warn('Could not find distances for both angles')
+            self.get_logger().warn('Not enough distances_right values to calculate CD distance.')
 
-    def get_CD_distance(self, msg, angles):
-        distances = {}
-        data = msg.data
+    def calculate_CD_distance(self, a, b):
+        angle1 = 100
+        angle2 = 90
 
-        # Extract distance values for the specified angles
-        for i in range(0, len(data), 2):
-            angle = data[i]
-            distance = data[i + 1]
-            self.get_logger().info(f'Angle: {angle}, Distance: {distance}')
-            if angle in angles:
-                distances[angle] = distance
-        
-        # Retrieve distances for angles 100 and 90
-        angle1=100
-        angle2=90
-        a = distances.get(angle1)
-        b = distances.get(angle2)
+        angle_1_rad = math.radians(angle1)
+        angle_diff_rad = math.radians(angle1 - angle2)
+        sin_diff = math.sin(angle_diff_rad)
+        cos_diff = math.cos(angle_diff_rad)
+        AC = 3
 
-        # Calculate CD distance if both distances are available
-        if a is not None and b is not None:
-            self.get_logger().info(f'Distances at {angle1} and {angle2} degrees found: {a}, {b}')
-            angle_1_rad = math.radians(angle1)
-            angle_diff_rad = math.radians(angle1 - angle2)
-            sin_diff = math.sin(angle_diff_rad)
-            cos_diff = math.cos(angle_diff_rad)
-            AC=3
-            # Compute alpha using the given formula
+        # Compute alpha using the given formula
+        try:
             alpha = math.atan((a * cos_diff - b) / (a * sin_diff))
             AB = b * math.cos(alpha)
             CD = AB + AC * math.sin(alpha)
             self.get_logger().info(f'Calculated alpha: {alpha} radians, {math.degrees(alpha)} degrees')
-        else:
-            self.get_logger().warn(f'Distances for angles {angle1} or {angle2} not found.')
-            CD = None
-
-        return CD
+            return CD
+        except ZeroDivisionError:
+            self.get_logger().error('ZeroDivisionError: sin_diff is zero, cannot calculate alpha.')
+            return None
 
     def publish_CD_distance(self, CD):
         msg = Float32()
