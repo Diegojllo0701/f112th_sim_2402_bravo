@@ -2,7 +2,7 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
-from std_msgs.msg import Float32MultiArray
+from f112th_sim_2402_bravo.msg import AngleDistance
 
 class ScanReader(Node):
     def __init__(self):
@@ -13,13 +13,13 @@ class ScanReader(Node):
             self.scan_callback,
             10)
         self.subscription  # prevent unused variable warning
-        self.publisher_ = self.create_publisher(Float32MultiArray, 'angle_distances', 10)
+        self.publisher_ = self.create_publisher(AngleDistance, 'angle_distances', 10)
 
     def scan_callback(self, msg):
-        angles_to_check = [-180, -90, 0, 80 ,90]
+        angles_to_check = [-180, -90, 0, 100, 90]
         distances = self.get_distances_at_angles(msg, angles_to_check)
         self.get_logger().info('Distances at angles {}: {}'.format(angles_to_check, distances))
-        self.publish_distances(angles_to_check, distances)
+        self.publish_distances(distances)
 
     def get_distances_at_angles(self, msg, angles):
         distances = []
@@ -34,19 +34,19 @@ class ScanReader(Node):
             #self.get_logger().info('Angle min: {}, Angle max: {}, Angle increment: {}'.format(msg.angle_min, msg.angle_max, msg.angle_increment))
             #self.get_logger().info('Range size: {}'.format(len(msg.ranges)))
 
-            #Make sure the index is within the range of the array
+            # Make sure the index is within the range of the array
             if 0 <= index < len(msg.ranges):
                 distances.append(msg.ranges[index])
             else:
                 distances.append(float('inf')) # If the index is out of range, append infinity
         return distances
 
-    def publish_distances(self, angles, distances):
-        msg = Float32MultiArray()
-        msg.data = []
-        for angle, distance in zip(angles, distances):
-            msg.data.append(angle)
-            msg.data.append(distance)
+    def publish_distances(self, distances):
+        msg = AngleDistance()
+        msg.distance_back = distances[0]
+        msg.distances_left = [distances[1]]
+        msg.distance_front = distances[2]
+        msg.distances_right = [distances[3], distances[4]]
         self.publisher_.publish(msg)
 
 def main(args=None):

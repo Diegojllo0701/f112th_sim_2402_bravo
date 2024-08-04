@@ -19,7 +19,7 @@ class AngleDistancesReader(Node):
     def angle_distances_callback(self, msg):
         self.get_logger().info('Received angle distances message.')
         # Define the angles we are interested in
-        angles_to_check = [80, 90]
+        angles_to_check = [100, 90]
         
         # Extract the distances for the specified angles and calculate CD distance
         CD = self.get_CD_distance(msg, angles_to_check)
@@ -29,7 +29,7 @@ class AngleDistancesReader(Node):
             self.get_logger().info(f'CD distance to wall: {CD}')
             self.publish_CD_distance(CD)
         else:
-            self.get_logger().warn('Could not find distances for both angles 80 and 90')
+            self.get_logger().warn('Could not find distances for both angles')
 
     def get_CD_distance(self, msg, angles):
         distances = {}
@@ -43,25 +43,27 @@ class AngleDistancesReader(Node):
             if angle in angles:
                 distances[angle] = distance
         
-        # Retrieve distances for angles 80 and 90
-        dist_80 = distances.get(80)
-        dist_90 = distances.get(90)
+        # Retrieve distances for angles 100 and 90
+        angle1=100
+        angle2=90
+        a = distances.get(angle1)
+        b = distances.get(angle2)
 
         # Calculate CD distance if both distances are available
-        if dist_80 is not None and dist_90 is not None:
-            self.get_logger().info(f'Distances at 80 and 90 degrees found: {dist_80}, {dist_90}')
-            angle_80_rad = math.radians(80)
-            angle_diff_rad = math.radians(90 - 80)
-            sin_80 = math.sin(angle_80_rad)
+        if a is not None and b is not None:
+            self.get_logger().info(f'Distances at {angle1} and {angle2} degrees found: {a}, {b}')
+            angle_1_rad = math.radians(angle1)
+            angle_diff_rad = math.radians(angle1 - angle2)
+            sin_diff = math.sin(angle_diff_rad)
             cos_diff = math.cos(angle_diff_rad)
             AC=3
             # Compute alpha using the given formula
-            alpha = math.atan((dist_80 * cos_diff - dist_90) / (dist_80 * sin_80))
-            AB = dist_90 * math.cos(alpha)
+            alpha = math.atan((a * cos_diff - b) / (a * sin_diff))
+            AB = b * math.cos(alpha)
             CD = AB + AC * math.sin(alpha)
             self.get_logger().info(f'Calculated alpha: {alpha} radians, {math.degrees(alpha)} degrees')
         else:
-            self.get_logger().warn('Distances for angles 80 or 90 not found.')
+            self.get_logger().warn(f'Distances for angles {angle1} or {angle2} not found.')
             CD = None
 
         return CD
