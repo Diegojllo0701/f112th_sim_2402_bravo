@@ -40,7 +40,8 @@ endif()
 # Install Python scripts
 install(PROGRAMS
   nodes/scan_subscriptor.py
-  nodes/wall_distance.py
+  nodes/dist_finder.py
+  nodes/control.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

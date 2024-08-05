@@ -13,7 +13,7 @@ class AngleDistancesReader(Node):
             'angle_distances',
             self.angle_distances_callback,
             10)
-        self.publisher_ = self.create_publisher(Float32, 'wall_distance', 10)
+        self.publisher_ = self.create_publisher(Float32, 'error_signal', 10)
         self.get_logger().info('AngleDistancesReader node has been started.')
 
     def angle_distances_callback(self, msg):
@@ -23,13 +23,13 @@ class AngleDistancesReader(Node):
         if len(msg.distances_right) >= 2:
             a = msg.distances_right[0]
             b = msg.distances_right[1]
-            CD = self.calculate_CD_distance(a, b)
-            
-            if CD is not None:
-                self.get_logger().info(f'CD distance to wall: {CD}')
-                self.publish_CD_distance(CD)
+            CD,alpha = self.calculate_CD_distance(a, b)
+            error = self.calculate_error(CD,alpha)
+            if error is not None:
+                self.get_logger().info(f'error_signal: {error}')
+                self.publish_CD_distance(error)
             else:
-                self.get_logger().warn('Could not calculate CD distance.')
+                self.get_logger().warn(f'Could not calculate error signal.error_signal: {error}')
         else:
             self.get_logger().warn('Not enough distances_right values to calculate CD distance.')
 
@@ -41,24 +41,37 @@ class AngleDistancesReader(Node):
         angle_diff_rad = math.radians(angle1 - angle2)
         sin_diff = math.sin(angle_diff_rad)
         cos_diff = math.cos(angle_diff_rad)
-        AC = 3
+        AC = 1
 
         # Compute alpha using the given formula
-        try:
-            alpha = math.atan((a * cos_diff - b) / (a * sin_diff))
-            AB = b * math.cos(alpha)
-            CD = AB + AC * math.sin(alpha)
-            self.get_logger().info(f'Calculated alpha: {alpha} radians, {math.degrees(alpha)} degrees')
-            return CD
-        except ZeroDivisionError:
-            self.get_logger().error('ZeroDivisionError: sin_diff is zero, cannot calculate alpha.')
-            return None
+        if a<30 and b<30:
+            try:
+                alpha = math.atan((a * cos_diff - b) / (a * sin_diff))
+                AB = b * math.cos(alpha)
+                CD = AB - AC * math.sin(alpha)#verificar signo
+                self.get_logger().info(f'Calculated alpha: {alpha} radians, {math.degrees(alpha)} degrees, CD distance: {CD}')
+                return CD, alpha
+            except ZeroDivisionError:
+                self.get_logger().error('ZeroDivisionError: sin_diff is zero, cannot calculate alpha.')
+                return None, None
+        else:
+            CD =0
+            alpha=0.1
+            return CD,alpha
+
+
+    def calculate_error(self, CD, alpha):
+        fixed_distance=1.5
+        error=CD-fixed_distance
+        self.get_logger().info(f'Calculated error: {error}')    
+        return error
+
 
     def publish_CD_distance(self, CD):
         msg = Float32()
         msg.data = CD
         self.publisher_.publish(msg)
-        self.get_logger().info('Published CD distance to wall_distance topic.')
+        self.get_logger().info('Published error to error_signal topic.')
 
 def main(args=None):
     rclpy.init(args=args)
