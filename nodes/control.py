@@ -13,14 +13,27 @@ class WallFollower(Node):
             'error_signal',
             self.wall_distance_callback,
             10)
+        self.subscription = self.create_subscription(
+            bool,
+            'break_state',
+            self.break_state_callback,
+            10)
+        
         self.publisher_ = self.create_publisher(Twist, 'cmd_vel_nav', 10)
         self.Kp = 5.0  # Proportional gain constant
         self.Kd = 0.1  # Derivative gain constant
         self.previous_error = 0.0
         self.previous_time = self.get_clock().now()
         self.use_derivative = False  # Set to False to disable derivative control
-        self.linear_velocity = 0.5  # Constant linear velocity
+        self.linear_velocity = 1  # Constant linear velocity
         self.get_logger().info('WallFollower node has been started.')
+
+    def break_state_callback(self, msg):
+        if msg.data:
+            self.get_logger().info('Received break state signal: True')
+            self.publish_control_signal(3.14)
+        else:
+            self.get_logger().info('Received break state signal: False')
 
     def wall_distance_callback(self, msg):
         current_error = msg.data
