@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
+
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float32
+from std_msgs.msg import Float32, Bool
 from geometry_msgs.msg import Twist
 import math
 
@@ -13,8 +14,8 @@ class WallFollower(Node):
             'error_signal',
             self.wall_distance_callback,
             10)
-        self.subscription = self.create_subscription(
-            bool,
+        self.break_subscription = self.create_subscription(
+            Bool,
             'break_state',
             self.break_state_callback,
             10)
@@ -25,7 +26,7 @@ class WallFollower(Node):
         self.previous_error = 0.0
         self.previous_time = self.get_clock().now()
         self.use_derivative = False  # Set to False to disable derivative control
-        self.linear_velocity = 1  # Constant linear velocity
+        self.linear_velocity = 1.0  # Constant linear velocity, ensuring it's a float
         self.get_logger().info('WallFollower node has been started.')
 
     def break_state_callback(self, msg):
@@ -62,10 +63,10 @@ class WallFollower(Node):
     def publish_control_signal(self, control_signal):
         msg = Twist()
         # Set constant linear velocity
-        msg.linear.x = self.linear_velocity
+        msg.linear.x = float(self.linear_velocity)  # Ensuring it's a float
         # Set angular velocity based on control signal
-        msg.angular.z = control_signal
-        if math.isnan(control_signal)==False:
+        msg.angular.z = float(control_signal)  # Ensuring it's a float
+        if not math.isnan(control_signal):
             self.publisher_.publish(msg)
             self.get_logger().info(f'Published control signal to cmd_vel_nav topic. Angular velocity: {msg.angular.z}')
 
