@@ -1,0 +1,3 @@
+import rlcompleter
+
+import numpy
