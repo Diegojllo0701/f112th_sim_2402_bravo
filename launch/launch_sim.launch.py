@@ -47,7 +47,17 @@ def generate_launch_description():
     twist_mux_node = Node(package='twist_mux', 
                     executable='twist_mux',
                     parameters=[twist_mux_params,{'use_sim_time': True}],
-                    remappings=[('/cmd_vel_out','/cmd_vel')]
+                    remappings=[('/cmd_vel_out','/cmd_vel_par')]
+    )
+    scan_reader_node = Node(
+        package=package_name,  # Replace with your package name
+        executable='scan_subscriptor.py',  # Ensure this matches the executable name
+        output='screen'
+    )
+    emergency_brake_node = Node(
+        package= package_name,  # Replace with your package name
+        executable='em_break.py',  # Ensure this matches the executable name
+        output='screen'
     )
 
     # Launch them all!
@@ -57,4 +67,6 @@ def generate_launch_description():
         spawn_entity,
         joystick,
         twist_mux_node,
+        scan_reader_node,
+        emergency_brake_node,
     ])
