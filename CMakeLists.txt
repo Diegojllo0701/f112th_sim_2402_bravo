@@ -42,6 +42,7 @@ install(PROGRAMS
   nodes/scan_subscriptor.py
   nodes/dist_finder.py
   nodes/control.py
+  nodes/em_break.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
