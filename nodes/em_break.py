@@ -28,6 +28,10 @@ class EmergencyBrakeNode(Node):
         self.publisher_cmd_vel = self.create_publisher(Twist, 'cmd_vel', 10)
         
         self.last_cmd_vel_par = Twist()
+
+        # Publicador estado frenado
+        self.publisher_break = self.create_publisher(bool, 'break_state', 10)
+        
         
     def distance_callback(self, msg):
         self.distance_front = msg.distance_front
@@ -45,10 +49,12 @@ class EmergencyBrakeNode(Node):
                 # Aplicar freno de emergencia
                 cmd_vel.linear.x = float(0)
                 cmd_vel.angular.z = float(0)
+                self.publisher_break.publish(True)
             else:
                 # Pasar valores de cmd_vel_par a cmd_vel
                 cmd_vel.linear.x = float(self.last_cmd_vel_par.linear.x)
                 cmd_vel.angular.z = float(self.last_cmd_vel_par.angular.z)
+                self.publisher_break.publish(False)
             
             self.publisher_cmd_vel.publish(cmd_vel)
 
