@@ -24,10 +24,10 @@ class AngleDistancesReader(Node):
             a = msg.distances_right[0]
             b = msg.distances_right[1]
             CD,alpha = self.calculate_CD_distance(a, b)
-            error = self.calculate_error(CD,alpha)
+            error = self.calculate_error(CD,alpha,msg.distances_left[0])
             if error is not None:
                 self.get_logger().info(f'error_signal: {error}')
-                self.publish_CD_distance(error)
+                self.publish_error(error)
             else:
                 self.get_logger().warn(f'Could not calculate error signal.error_signal: {error}')
         else:
@@ -60,14 +60,18 @@ class AngleDistancesReader(Node):
             return CD,alpha
 
 
-    def calculate_error(self, CD, alpha):
-        fixed_distance=1.5
-        error=CD-fixed_distance
+    def calculate_error(self, CD, alpha,distance_left):
+        if distance_left < 12:
+            target_distance = (distance_left + CD) / 2
+        else:
+            target_distance = 1.5 
+
+        error=CD-target_distance
         self.get_logger().info(f'Calculated error: {error}')    
         return error
 
 
-    def publish_CD_distance(self, CD):
+    def publish_error(self, CD):
         msg = Float32()
         msg.data = CD
         self.publisher_.publish(msg)
