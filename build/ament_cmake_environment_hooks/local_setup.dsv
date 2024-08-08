@@ -1,0 +1,4 @@
+source;share/f112th_sim_2402_bravo/environment/ament_prefix_path.sh
+source;share/f112th_sim_2402_bravo/environment/library_path.sh
+source;share/f112th_sim_2402_bravo/environment/path.sh
+source;share/f112th_sim_2402_bravo/environment/pythonpath.sh

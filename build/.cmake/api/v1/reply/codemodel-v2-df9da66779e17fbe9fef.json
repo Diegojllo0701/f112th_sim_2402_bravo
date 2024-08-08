@@ -1,0 +1,233 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"childIndexes" : 
+					[
+						1
+					],
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-Debug-484e17c4a56ac11dd7f9.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.12"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10,
+						11,
+						12,
+						13,
+						14,
+						15,
+						16,
+						17
+					]
+				},
+				{
+					"build" : "f112th_sim_2402_bravo__py",
+					"jsonFile" : "directory-f112th_sim_2402_bravo__py-Debug-469f29492570000cd954.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.12"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 0,
+					"source" : "build/f112th_sim_2402_bravo__py",
+					"targetIndexes" : 
+					[
+						4
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0,
+						1
+					],
+					"name" : "f112th_sim_2402_bravo",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10,
+						11,
+						12,
+						13,
+						14,
+						15,
+						16,
+						17
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "ament_cmake_python_build_f112th_sim_2402_bravo_egg::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-ament_cmake_python_build_f112th_sim_2402_bravo_egg-Debug-8476becdef6c404d7820.json",
+					"name" : "ament_cmake_python_build_f112th_sim_2402_bravo_egg",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "ament_cmake_python_copy_f112th_sim_2402_bravo::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-ament_cmake_python_copy_f112th_sim_2402_bravo-Debug-0ac6d5c9f832507e3f49.json",
+					"name" : "ament_cmake_python_copy_f112th_sim_2402_bravo",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "f112th_sim_2402_bravo::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-f112th_sim_2402_bravo-Debug-6f3da9ced9a2621e1120.json",
+					"name" : "f112th_sim_2402_bravo",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "f112th_sim_2402_bravo__cpp::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-f112th_sim_2402_bravo__cpp-Debug-71f30129b020c2c82592.json",
+					"name" : "f112th_sim_2402_bravo__cpp",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 1,
+					"id" : "f112th_sim_2402_bravo__py::@ac53f9cca3405dc05cab",
+					"jsonFile" : "target-f112th_sim_2402_bravo__py-Debug-d0f612551fe0bb24cf5b.json",
+					"name" : "f112th_sim_2402_bravo__py",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "f112th_sim_2402_bravo__rosidl_generator_c::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-f112th_sim_2402_bravo__rosidl_generator_c-Debug-eb59e4b12ff7eca06a53.json",
+					"name" : "f112th_sim_2402_bravo__rosidl_generator_c",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "f112th_sim_2402_bravo__rosidl_generator_py::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-f112th_sim_2402_bravo__rosidl_generator_py-Debug-5fe29fefd79ccc0b8256.json",
+					"name" : "f112th_sim_2402_bravo__rosidl_generator_py",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "f112th_sim_2402_bravo__rosidl_typesupport_c::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-f112th_sim_2402_bravo__rosidl_typesupport_c-Debug-d0423c1f522ee40d7947.json",
+					"name" : "f112th_sim_2402_bravo__rosidl_typesupport_c",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "f112th_sim_2402_bravo__rosidl_typesupport_c__pyext::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-f112th_sim_2402_bravo__rosidl_typesupport_c__pyext-Debug-f19c5d88f523d1032ee3.json",
+					"name" : "f112th_sim_2402_bravo__rosidl_typesupport_c__pyext",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "f112th_sim_2402_bravo__rosidl_typesupport_cpp::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-f112th_sim_2402_bravo__rosidl_typesupport_cpp-Debug-f0147102152a4649196a.json",
+					"name" : "f112th_sim_2402_bravo__rosidl_typesupport_cpp",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "f112th_sim_2402_bravo__rosidl_typesupport_fastrtps_c::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-f112th_sim_2402_bravo__rosidl_typesupport_fastrtps_c-Debug-a9f2ef6837ee5c194d9b.json",
+					"name" : "f112th_sim_2402_bravo__rosidl_typesupport_fastrtps_c",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "f112th_sim_2402_bravo__rosidl_typesupport_fastrtps_c__pyext::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-f112th_sim_2402_bravo__rosidl_typesupport_fastrtps_c__pyext-Debug-4bb99ac2dea4cb7ab8f1.json",
+					"name" : "f112th_sim_2402_bravo__rosidl_typesupport_fastrtps_c__pyext",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "f112th_sim_2402_bravo__rosidl_typesupport_fastrtps_cpp::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-f112th_sim_2402_bravo__rosidl_typesupport_fastrtps_cpp-Debug-567d55ded19682aac773.json",
+					"name" : "f112th_sim_2402_bravo__rosidl_typesupport_fastrtps_cpp",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "f112th_sim_2402_bravo__rosidl_typesupport_introspection_c::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-f112th_sim_2402_bravo__rosidl_typesupport_introspection_c-Debug-e1a169c072224ddfd442.json",
+					"name" : "f112th_sim_2402_bravo__rosidl_typesupport_introspection_c",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "f112th_sim_2402_bravo__rosidl_typesupport_introspection_c__pyext::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-f112th_sim_2402_bravo__rosidl_typesupport_introspection_c__pyext-Debug-912baf53e8b0b1a9571d.json",
+					"name" : "f112th_sim_2402_bravo__rosidl_typesupport_introspection_c__pyext",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "f112th_sim_2402_bravo__rosidl_typesupport_introspection_cpp::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-f112th_sim_2402_bravo__rosidl_typesupport_introspection_cpp-Debug-43931cc73308cff7c139.json",
+					"name" : "f112th_sim_2402_bravo__rosidl_typesupport_introspection_cpp",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "f112th_sim_2402_bravo_uninstall::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-f112th_sim_2402_bravo_uninstall-Debug-af78f57dddf932b61a25.json",
+					"name" : "f112th_sim_2402_bravo_uninstall",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "uninstall::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-uninstall-Debug-8f96cb1a80a8db7c9c52.json",
+					"name" : "uninstall",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/home/oscar/ros2_ws_2402/src/f112th_sim_2402_bravo/build",
+		"source" : "/home/oscar/ros2_ws_2402/src/f112th_sim_2402_bravo"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 3
+	}
+}
