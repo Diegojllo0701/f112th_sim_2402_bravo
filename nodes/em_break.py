@@ -46,7 +46,7 @@ class EmergencyBrakeNode(Node):
             cmd_vel = Twist()
             break_state = Bool()
 
-            if self.distance_front < 0.8 and self.last_cmd_vel_par.linear.x > 0:
+            if self.distance_front < 1 and self.last_cmd_vel_par.linear.x > 0:
                 # Aplicar freno de emergencia
                 cmd_vel.linear.x = float(0)
                 cmd_vel.angular.z = float(0)
