@@ -28,8 +28,10 @@ class WallFollower(Node):
         self.use_derivative = False  # Set to False to disable derivative control
         self.linear_velocity = 1.0  # Constant linear velocity, ensuring it's a float
         self.get_logger().info('WallFollower node has been started.')
+        #self.break_state = Bool()
 
     def break_state_callback(self, msg):
+        #self.break_state.data = msg.data
         if msg.data:
             self.get_logger().info('Received break state signal: True')
             self.publish_control_signal(3.14)
@@ -37,7 +39,6 @@ class WallFollower(Node):
             self.get_logger().info('Received break state signal: False')
 
     def wall_distance_callback(self, msg):
-        current_error = msg.data
         current_time = self.get_clock().now()
         delta_time = (current_time - self.previous_time).nanoseconds / 1e9
 
