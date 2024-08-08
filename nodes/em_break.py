@@ -29,8 +29,6 @@ class EmergencyBrakeNode(Node):
         
         self.last_cmd_vel_par = Twist()
 
-        # Publicador estado frenado
-        #self.publisher_break = self.create_publisher(bool, 'break_state', 10)
         
         
     def distance_callback(self, msg):
@@ -44,31 +42,18 @@ class EmergencyBrakeNode(Node):
     def check_and_publish_cmd_vel(self):
         if self.distance_front is not None:
             cmd_vel = Twist()
-            #break_state = bool
             
             if self.distance_front < 0.8 and self.last_cmd_vel_par.linear.x > 0:
                 # Aplicar freno de emergencia
                 cmd_vel.linear.x = float(0)
                 cmd_vel.angular.z = float(0)
-<<<<<<< HEAD
-                #self.publisher_break.publish(True)
-=======
-                break_state = True
-                
->>>>>>> b2ecb86 (break_state)
+
             else:
                 # Pasar valores de cmd_vel_par a cmd_vel
                 cmd_vel.linear.x = float(self.last_cmd_vel_par.linear.x)
-                cmd_vel.angular.z = float(self.last_cmd_vel_par.angular.z)
-<<<<<<< HEAD
-                #self.publisher_break.publish(False)
-=======
-                break_state = False
-                
->>>>>>> b2ecb86 (break_state)
-            
+                cmd_vel.angular.z = float(self.last_cmd_vel_par.angular.z)   
+
             self.publisher_cmd_vel.publish(cmd_vel)
-            #self.publisher_break.publish(break_state)
 
 def main(args=None):
     rclpy.init(args=args)
