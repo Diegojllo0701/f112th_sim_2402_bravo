@@ -14,31 +14,33 @@ class WallFollower(Node):
             'error_signal',
             self.wall_distance_callback,
             10)
+        
+        self.publisher_ = self.create_publisher(Twist, 'cmd_vel_nav', 10)
+        self.Kp = 2.0  # Proportional gain constant
+        self.Kd = 0.1  # Derivative gain constant
+        self.previous_error = 0.0
+        self.previous_time = self.get_clock().now()
+        self.use_derivative = False  # Set to False to disable derivative control
+        self.linear_velocity = 1  # Constant linear velocity, ensuring it's a float
+        self.get_logger().info('WallFollower node has been started.')
+        self.break_state = Bool()
+        self.control_sig = 0
         self.break_subscription = self.create_subscription(
             Bool,
             'break_state',
             self.break_state_callback,
             10)
-        
-        self.publisher_ = self.create_publisher(Twist, 'cmd_vel_nav', 10)
-        self.Kp = 5.0  # Proportional gain constant
-        self.Kd = 0.1  # Derivative gain constant
-        self.previous_error = 0.0
-        self.previous_time = self.get_clock().now()
-        self.use_derivative = False  # Set to False to disable derivative control
-        self.linear_velocity = 1.0  # Constant linear velocity, ensuring it's a float
-        self.get_logger().info('WallFollower node has been started.')
-        #self.break_state = Bool()
 
     def break_state_callback(self, msg):
-        #self.break_state.data = msg.data
+        self.break_state.data = msg.data
         if msg.data:
             self.get_logger().info('Received break state signal: True')
-            self.publish_control_signal(3.14)
+            self.publish_control_signal(self.control_sig)
         else:
             self.get_logger().info('Received break state signal: False')
 
     def wall_distance_callback(self, msg):
+        current_error = msg.data
         current_time = self.get_clock().now()
         delta_time = (current_time - self.previous_time).nanoseconds / 1e9
 
@@ -58,6 +60,7 @@ class WallFollower(Node):
         # Update previous error and time
         self.previous_error = current_error
         self.previous_time = current_time
+        self.control_sig = control_signal
 
         self.publish_control_signal(control_signal)
 
@@ -67,7 +70,7 @@ class WallFollower(Node):
         msg.linear.x = float(self.linear_velocity)  # Ensuring it's a float
         # Set angular velocity based on control signal
         msg.angular.z = float(control_signal)  # Ensuring it's a float
-        if not math.isnan(control_signal):
+        if not math.isnan(control_signal) and self.break_state.data:
             self.publisher_.publish(msg)
             self.get_logger().info(f'Published control signal to cmd_vel_nav topic. Angular velocity: {msg.angular.z}')
 
