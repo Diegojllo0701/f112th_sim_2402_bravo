@@ -4,7 +4,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32
 from geometry_msgs.msg import Twist
-from f112th_sim_2402_bravo.msg import AngleDistance
+from f112th_sim_2402_bravo.msg import AngleDistance  # Ensure to import the correct message
 import time
 import threading
 import math
@@ -24,14 +24,14 @@ class WallFollower(Node):
             10)
         
         self.publisher_ = self.create_publisher(Twist, 'cmd_vel_nav', 10)
-        self.Kp = 1.0  # Proportional gain constant
+        self.Kp = 2.7  # Proportional gain constant
         self.Kd = 0.1  # Derivative gain constant
         self.previous_error = 0.0
         self.previous_time = self.get_clock().now()
         self.use_derivative = False  # Set to False to disable derivative control
-        self.linear_velocity = 0.2  # Constant linear velocity, ensuring it's a float
+        self.linear_velocity = 1.0  # Constant linear velocity, ensuring it's a float
         self.angular_velocity = math.pi / 4  # 45 degrees per second for rotation
-        self.rotation_duration = math.pi / 2 / self.angular_velocity  # Duration to rotate 90 degrees
+        self.rotation_duration = math.pi / 4 / self.angular_velocity  # Duration to rotate 90 degrees
         self.get_logger().info('WallFollower node has been started.')
 
         self.rotating = False
@@ -42,7 +42,7 @@ class WallFollower(Node):
             current_time = self.get_clock().now()
             delta_time = (current_time - self.previous_time).nanoseconds / 1e9
 
-            #self.get_logger().info(f'Received wall distance error signal: {current_error}')
+            self.get_logger().info(f'Received wall distance error signal: {current_error}')
 
             # Proportional control
             control_signal = self.Kp * current_error
@@ -51,8 +51,9 @@ class WallFollower(Node):
                 # Derivative control
                 error_derivative = (current_error - self.previous_error) / delta_time
                 control_signal += self.Kd * error_derivative
-                #self.get_logger().info(f'Error derivative: {error_derivative}, Control signal (PD): {control_signal}')
-
+                self.get_logger().info(f'Error derivative: {error_derivative}, Control signal (PD): {control_signal}')
+            else:
+                self.get_logger().info(f'Control signal (P): {control_signal}')
 
             # Update previous error and time
             self.previous_error = current_error
@@ -66,23 +67,22 @@ class WallFollower(Node):
             distance_front = msg.distance_front
             distances_left = msg.distances_left[0]
 
-            #self.get_logger().info(f'Received angle distances: right: {distances_right}, front: {distance_front}, left: {distances_left}')
+            self.get_logger().info(f'Received angle distances: right: {distances_right}, front: {distance_front}, left: {distances_left}')
 
-            if distances_right>2.5:  # No wall to the right
+            if distances_right>1.8:  # No wall to the right
                 self.girar_derecha()
             elif distance_front > 0.5:  # No wall in front
                 return  # Continue forward, handled by wall_distance_callback
-            elif distances_left>2.5:  # No wall to the left
+            elif distances_left>1.8:  # No wall to the left
                 self.girar_izquierda()
             else:  # Wall on all sides
                 self.dar_media_vuelta()
-                self.get_logger().info(f'media vuelta {distances_right},{distance_front},{distances_left}')
 
     def girar_derecha(self):
         self.get_logger().info('Turning right.')
         msg = Twist()
         msg.linear.x = 0.0
-        msg.angular.z = self.angular_velocity
+        msg.angular.z = -self.angular_velocity
         self.publisher_.publish(msg)
         time.sleep(self.rotation_duration)
         self.stop_rotation()
@@ -91,7 +91,7 @@ class WallFollower(Node):
         self.get_logger().info('Turning left.')
         msg = Twist()
         msg.linear.x = 0.0
-        msg.angular.z = -self.angular_velocity
+        msg.angular.z = self.angular_velocity
         self.publisher_.publish(msg)
         time.sleep(self.rotation_duration)
         self.stop_rotation()
