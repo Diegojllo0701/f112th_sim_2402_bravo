@@ -61,7 +61,7 @@ class AngleDistancesReader(Node):
 
 
     def calculate_error(self, CD, alpha,distance_left):
-        if distance_left < 12:
+        if distance_left < 3.5:
             target_distance = (distance_left + CD) / 2
         else:
             target_distance = 1.5 
