@@ -44,6 +44,8 @@ install(PROGRAMS
   nodes/dist_finder.py
   nodes/control.py
   nodes/em_break.py
+  nodes/ftg_error.py
+  nodes/ftg_control.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
