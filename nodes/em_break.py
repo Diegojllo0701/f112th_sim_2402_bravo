@@ -13,7 +13,7 @@ class EmergencyBrakeNode(Node):
         self.distance_front = None
         self.previous_distance_front = None
         self.previous_time = None
-        self.ttc_threshold = 1.0  # Define your TTC threshold (seconds)
+        self.ttc_threshold = 0.5# Define your TTC threshold (seconds)
         
         # Subscribe to angle_distances
         self.subscription_distance = self.create_subscription(

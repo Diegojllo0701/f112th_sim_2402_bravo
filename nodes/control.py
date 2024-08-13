@@ -24,14 +24,14 @@ class WallFollower(Node):
             10)
         
         self.publisher_ = self.create_publisher(Twist, 'cmd_vel_nav', 10)
-        self.Kp = 2.7  # Proportional gain constant
-        self.Kd = 0.1  # Derivative gain constant
+        self.Kp = 1.2  # Proportional gain constant
+        self.Kd = 0.1 # Derivative gain constant
         self.previous_error = 0.0
         self.previous_time = self.get_clock().now()
-        self.use_derivative = False  # Set to False to disable derivative control
-        self.linear_velocity = 1.0  # Constant linear velocity, ensuring it's a float
-        self.angular_velocity = math.pi / 4  # 45 degrees per second for rotation
-        self.rotation_duration = math.pi / 4 / self.angular_velocity  # Duration to rotate 90 degrees
+        self.use_derivative = True # Set to False to disable derivative control
+        self.linear_velocity = 0.3# Constant linear velocity, ensuring it's a float
+        self.angular_velocity = math.pi/4 # 45 degrees per second for rotation
+        self.rotation_duration = math.pi /4/ self.angular_velocity  # Duration to rotate 90 degrees
         self.get_logger().info('WallFollower node has been started.')
 
         self.rotating = False
@@ -39,6 +39,7 @@ class WallFollower(Node):
     def wall_distance_callback(self, msg):
         if not self.rotating:  # Only process wall distance if not rotating
             current_error = msg.data
+            self.error = current_error
             current_time = self.get_clock().now()
             delta_time = (current_time - self.previous_time).nanoseconds / 1e9
 
@@ -77,6 +78,7 @@ class WallFollower(Node):
                 self.girar_izquierda()
             else:  # Wall on all sides
                 self.dar_media_vuelta()
+
 
     def girar_derecha(self):
         self.get_logger().info('Turning right.')
