@@ -81,8 +81,15 @@ class FollowTheGapNode(Node):
         # Step 4: Select the target point
         if self.gap_selection_mode == "widest":
             target_index = max_gap[len(max_gap) // 2]
-        else:
-            target_index = max_gap[-1]  # or some other logic for deepest gap
+        elif self.gap_selection_mode == "deepest":
+            max_depth = 0
+            best_gap = None
+            for gap in gaps:
+                gap_depth = np.median(relevant_ranges[gap])  # You can also try np.mean or np.median
+                if gap_depth > max_depth:
+                    max_depth = gap_depth
+                    best_gap = gap
+            target_index = best_gap[np.argmax(relevant_ranges[best_gap])]  # Furthest point in the deepest gap
 
         # Calculate the steering angle error
         angle_to_target = self.index_to_angle(target_index, len(relevant_ranges))
