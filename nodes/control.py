@@ -24,14 +24,15 @@ class WallFollower(Node):
             10)
         
         self.publisher_ = self.create_publisher(Twist, 'cmd_vel_nav', 10)
-        self.Kp = 1.6 # Proportional gain constant
-        self.Kd = 0.1# Derivative gain constant
+        self.Kp = 1.5 # Proportional gain constant
+        self.Kd = 0.2# Derivative gain constant
+        self.ki = 1 # Integrative gain constant
         self.previous_error = 0.0
         self.previous_time = self.get_clock().now()
         self.use_derivative = True # Set to False to disable derivative control
         self.linear_velocity = 0.5# Constant linear velocity, ensuring it's a float
         self.angular_velocity = math.pi/10 # 45 degrees per second for rotation
-        self.rotation_duration = math.pi /5/ self.angular_velocity  # Duration to rotate 90 degrees
+        self.rotation_duration = math.pi /10/ self.angular_velocity  # Duration to rotate 90 degrees
         self.get_logger().info('WallFollower node has been started.')
 
         self.rotating = False
@@ -47,11 +48,13 @@ class WallFollower(Node):
 
             # Proportional control
             control_signal = self.Kp * current_error
+            error_integrative = delta_time*current_error
 
             if self.use_derivative and delta_time > 0:
                 # Derivative control
+                error_integrative+=error_integrative
                 error_derivative = (current_error - self.previous_error) / delta_time
-                control_signal += self.Kd * error_derivative
+                control_signal += self.Kd * error_derivative + self.ki*error_integrative
                 self.get_logger().info(f'Error derivative: {error_derivative}, Control signal (PD): {control_signal}')
             else:
                 self.get_logger().info(f'Control signal (P): {control_signal}')
