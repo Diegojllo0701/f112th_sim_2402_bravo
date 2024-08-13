@@ -24,14 +24,14 @@ class WallFollower(Node):
             10)
         
         self.publisher_ = self.create_publisher(Twist, 'cmd_vel_nav', 10)
-        self.Kp = 1.2  # Proportional gain constant
-        self.Kd = 0.1 # Derivative gain constant
+        self.Kp = 1.6 # Proportional gain constant
+        self.Kd = 0.1# Derivative gain constant
         self.previous_error = 0.0
         self.previous_time = self.get_clock().now()
         self.use_derivative = True # Set to False to disable derivative control
         self.linear_velocity = 0.5# Constant linear velocity, ensuring it's a float
         self.angular_velocity = math.pi/10 # 45 degrees per second for rotation
-        self.rotation_duration = math.pi /10/ self.angular_velocity  # Duration to rotate 90 degrees
+        self.rotation_duration = math.pi /5/ self.angular_velocity  # Duration to rotate 90 degrees
         self.get_logger().info('WallFollower node has been started.')
 
         self.rotating = False
