@@ -29,9 +29,9 @@ class WallFollower(Node):
         self.previous_error = 0.0
         self.previous_time = self.get_clock().now()
         self.use_derivative = True # Set to False to disable derivative control
-        self.linear_velocity = 0.3# Constant linear velocity, ensuring it's a float
-        self.angular_velocity = math.pi/4 # 45 degrees per second for rotation
-        self.rotation_duration = math.pi /4/ self.angular_velocity  # Duration to rotate 90 degrees
+        self.linear_velocity = 0.5# Constant linear velocity, ensuring it's a float
+        self.angular_velocity = math.pi/10 # 45 degrees per second for rotation
+        self.rotation_duration = math.pi /10/ self.angular_velocity  # Duration to rotate 90 degrees
         self.get_logger().info('WallFollower node has been started.')
 
         self.rotating = False
