@@ -25,8 +25,8 @@ class WallFollower(Node):
         
         self.publisher_ = self.create_publisher(Twist, 'cmd_vel_nav', 10)
         self.Kp = 1.5 # Proportional gain constant
-        self.Kd = 0.2# Derivative gain constant
-        self.ki = 1 # Integrative gain constant
+        self.Kd = 0.1# Derivative gain constant
+        self.ki = 1.1 # Integrative gain constant
         self.previous_error = 0.0
         self.previous_time = self.get_clock().now()
         self.use_derivative = True # Set to False to disable derivative control
