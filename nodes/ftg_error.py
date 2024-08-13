@@ -68,7 +68,7 @@ class FollowTheGapNode(Node):
                 relevant_ranges[i] = 0
 
         # Step 3: Find the maximum gap
-        free_space_indices = np.where(relevant_ranges > 1)[0]
+        free_space_indices = np.where(relevant_ranges > 1.5)[0]
         if len(free_space_indices) == 0:
             self.handle_no_gaps()
             return
