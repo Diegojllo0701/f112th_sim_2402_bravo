@@ -13,9 +13,9 @@ class FollowTheGapNode(Node):
         # Declare and assign parameters
         self.lidar_num_points = self.declare_parameter('lidar_num_points', 360).value
         self.safety_bubble_radius = self.declare_parameter('safety_bubble_radius', 1).value
-        self.lidar_start_angle = self.declare_parameter('lidar_start_angle', -100).value
-        self.lidar_end_angle = self.declare_parameter('lidar_end_angle', 100).value
-        self.gap_selection_mode = self.declare_parameter('gap_selection_mode', 'widest').value
+        self.lidar_start_angle = self.declare_parameter('lidar_start_angle', -90).value
+        self.lidar_end_angle = self.declare_parameter('lidar_end_angle', 90).value
+        self.gap_selection_mode = self.declare_parameter('gap_selection_mode', 'deepest').value
         self.gap_depth_threshold = self.declare_parameter('gap_depth_threshold', 1.0).value
         self.gap_width_threshold = self.declare_parameter('gap_width_threshold', 0.2).value
         self.no_gap_behavior = self.declare_parameter('no_gap_behavior', 'stop').value
@@ -74,22 +74,29 @@ class FollowTheGapNode(Node):
             return
 
         gaps = np.split(free_space_indices, np.where(np.diff(free_space_indices) != 1)[0] + 1)
-        max_gap = max(gaps, key=len)
+        
+        # Biasing gaps towards the front
+        front_angle = 0  # this is the forward direction in degrees
+        def gap_bias(gap):
+            mid_index = gap[len(gap) // 2]
+            mid_angle = self.index_to_angle(mid_index, len(relevant_ranges))
+            bias = np.cos(mid_angle)  # bias factor, higher value means closer to the front
+            return len(gap) * bias  # combine gap width with bias
 
-
-
+        best_gap = max(gaps, key=gap_bias)
+        
         # Step 4: Select the target point
         if self.gap_selection_mode == "widest":
-            target_index = max_gap[len(max_gap) // 2]
+            target_index = best_gap[len(best_gap) // 2]
         elif self.gap_selection_mode == "deepest":
             max_depth = 0
             best_gap = None
             for gap in gaps:
-                gap_depth = np.median(relevant_ranges[gap])  # You can also try np.mean or np.median
+                gap_depth = np.max(relevant_ranges[gap])
                 if gap_depth > max_depth:
                     max_depth = gap_depth
                     best_gap = gap
-            target_index = best_gap[np.argmax(relevant_ranges[best_gap])]  # Furthest point in the deepest gap
+            target_index = best_gap[len(best_gap) // 2]
 
         # Calculate the steering angle error
         angle_to_target = self.index_to_angle(target_index, len(relevant_ranges))
@@ -98,6 +105,7 @@ class FollowTheGapNode(Node):
 
         # Publish the angle error
         self.publish_error(angle_error)
+
 
 
     def index_to_angle(self, index, relevant_num_points):
