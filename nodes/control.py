@@ -16,7 +16,6 @@ class WallFollower(Node):
             'error_signal',
             self.wall_distance_callback,
             10)
-<<<<<<< HEAD
         self.angle_subscription = self.create_subscription(
             AngleDistance,
             'angle_distances',
@@ -36,33 +35,6 @@ class WallFollower(Node):
         self.rotating = False
         self.get_logger().info('WallFollower node has been started.')
 
-=======
-        
-        self.publisher_ = self.create_publisher(Twist, 'cmd_vel_nav', 10)
-        self.Kp = 2.0  # Proportional gain constant
-        self.Kd = 0.1  # Derivative gain constant
-        self.previous_error = 0.0
-        self.previous_time = self.get_clock().now()
-        self.use_derivative = False  # Set to False to disable derivative control
-        self.linear_velocity = 1  # Constant linear velocity, ensuring it's a float
-        self.get_logger().info('WallFollower node has been started.')
-        self.break_state = Bool()
-        self.control_sig = 0
-        self.break_subscription = self.create_subscription(
-            Bool,
-            'break_state',
-            self.break_state_callback,
-            10)
-
-    def break_state_callback(self, msg):
-        self.break_state.data = msg.data
-        if msg.data:
-            self.get_logger().info('Received break state signal: True')
-            self.publish_control_signal(self.control_sig)
-        else:
-            self.get_logger().info('Received break state signal: False')
-
->>>>>>> main
     def wall_distance_callback(self, msg):
         if not self.rotating:
             current_error = msg.data
@@ -81,14 +53,10 @@ class WallFollower(Node):
             self.previous_error = current_error
             self.previous_time = current_time
 
-<<<<<<< HEAD
-            self.publish_control_signal(control_signal)
-=======
         # Update previous error and time
         self.previous_error = current_error
         self.previous_time = current_time
         self.control_sig = control_signal
->>>>>>> main
 
     def angle_distances_callback(self, msg):
         if not self.rotating:
@@ -140,7 +108,6 @@ class WallFollower(Node):
         self.rotating = False
 
     def publish_control_signal(self, control_signal):
-<<<<<<< HEAD
         if not self.rotating:
             msg = Twist()
             msg.linear.x = self.linear_velocity
@@ -148,17 +115,6 @@ class WallFollower(Node):
             if not math.isnan(control_signal):
                 self.publisher_.publish(msg)
                 self.get_logger().info(f'Publicado señal de control: Angular velocity: {msg.angular.z}')
-=======
-        msg = Twist()
-        # Set constant linear velocity
-        msg.linear.x = float(self.linear_velocity)  # Ensuring it's a float
-        # Set angular velocity based on control signal
-        msg.angular.z = float(control_signal)  # Ensuring it's a float
-        if not math.isnan(control_signal) and self.break_state.data:
-            self.publisher_.publish(msg)
-            self.get_logger().info(f'Published control signal to cmd_vel_nav topic. Angular velocity: {msg.angular.z}')
-
->>>>>>> main
 
 def main(args=None):
     rclpy.init(args=args)
