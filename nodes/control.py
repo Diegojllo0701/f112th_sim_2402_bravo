@@ -22,7 +22,7 @@ class WallFollower(Node):
             self.angle_distances_callback,
             10)
         
-        self.publisher_ = self.create_publisher(Twist, 'cmd_vel_nav', 10)
+        self.publisher_ = self.create_publisher(Twist, 'cmd_vel_par', 10)
         self.Kp = 0.5  # Constante proporcional
         self.Kd = 0.1  # Constante derivativa
         self.ki = 0.2  # Constante integrativa
