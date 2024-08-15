@@ -57,7 +57,7 @@ def generate_launch_description():
     emergency_brake_node = Node(
         package= package_name,  # Replace with your package name
         executable='em_break.py',  # Ensure this matches the executable name
-        output='screen'
+       output='screen'
     )
 
     # Launch them all!

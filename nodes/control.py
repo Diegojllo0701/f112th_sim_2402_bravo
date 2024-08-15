@@ -4,9 +4,8 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32
 from geometry_msgs.msg import Twist
-from f112th_sim_2402_bravo.msg import AngleDistance  # Ensure to import the correct message
+from f112th_sim_2402_bravo.msg import AngleDistance  # Asegúrate de importar el mensaje correcto
 import time
-import threading
 import math
 
 class WallFollower(Node):
@@ -24,42 +23,33 @@ class WallFollower(Node):
             10)
         
         self.publisher_ = self.create_publisher(Twist, 'cmd_vel_nav', 10)
-        self.Kp = 1.5 # Proportional gain constant
-        self.Kd = 0.1# Derivative gain constant
-        self.ki = 1.1 # Integrative gain constant
+        self.Kp = 0.5  # Constante proporcional
+        self.Kd = 0.1  # Constante derivativa
+        self.ki = 0.2  # Constante integrativa
         self.previous_error = 0.0
         self.previous_time = self.get_clock().now()
-        self.use_derivative = True # Set to False to disable derivative control
-        self.linear_velocity = 0.5# Constant linear velocity, ensuring it's a float
-        self.angular_velocity = math.pi/10 # 45 degrees per second for rotation
-        self.rotation_duration = math.pi /10/ self.angular_velocity  # Duration to rotate 90 degrees
-        self.get_logger().info('WallFollower node has been started.')
+        self.linear_velocity = 0.5  # Velocidad lineal constante
+        self.angular_velocity = math.pi / 4  # Velocidad angular para giros
+        self.rotation_duration = math.pi / 10 / self.angular_velocity  # Duración para girar 90 grados
 
         self.rotating = False
+        self.get_logger().info('WallFollower node has been started.')
 
     def wall_distance_callback(self, msg):
-        if not self.rotating:  # Only process wall distance if not rotating
+        if not self.rotating:
             current_error = msg.data
-            self.error = current_error
             current_time = self.get_clock().now()
             delta_time = (current_time - self.previous_time).nanoseconds / 1e9
 
-            self.get_logger().info(f'Received wall distance error signal: {current_error}')
-
-            # Proportional control
+            # Control proporcional-derivativo
             control_signal = self.Kp * current_error
-            error_integrative = delta_time*current_error
+            error_integrative = delta_time * current_error
 
-            if self.use_derivative and delta_time > 0:
-                # Derivative control
-                error_integrative+=error_integrative
+            if delta_time > 0:
                 error_derivative = (current_error - self.previous_error) / delta_time
-                control_signal += self.Kd * error_derivative + self.ki*error_integrative
-                self.get_logger().info(f'Error derivative: {error_derivative}, Control signal (PD): {control_signal}')
-            else:
-                self.get_logger().info(f'Control signal (P): {control_signal}')
+                control_signal += self.Kd * error_derivative + self.ki * error_integrative
 
-            # Update previous error and time
+            # Actualizar el error y el tiempo previo
             self.previous_error = current_error
             self.previous_time = current_time
 
@@ -68,46 +58,34 @@ class WallFollower(Node):
     def angle_distances_callback(self, msg):
         if not self.rotating:
             distances_right = msg.distances_right[0]
-            distance_front = msg.distance_front
-            distances_left = msg.distances_left[0]
+            distance_front = msg.distances_front[1]
+            distance_left = msg.distances_left[0]
 
-            self.get_logger().info(f'Received angle distances: right: {distances_right}, front: {distance_front}, left: {distances_left}')
-
-            if distances_right>1.8:  # No wall to the right
-                self.girar_derecha()
-            elif distance_front > 0.5:  # No wall in front
-                return  # Continue forward, handled by wall_distance_callback
-            elif distances_left>1.8:  # No wall to the left
+            # Log para depuración
+            self.get_logger().info(f'Right: {distances_right}, Front: {distance_front}, Left: {distance_left}')
+                
+            if distance_front > 0.8:  # No hay pared enfrente
+                self.avance_lineal()
+            elif distance_left > (distances_right+distance_left)/2:  # Detecta un callejón a la izquierda
                 self.girar_izquierda()
-            else:  # Wall on all sides
-                self.dar_media_vuelta()
-
+            elif distances_right > (distances_right+distance_left)/2:  # Mantener la distancia con la pared derecha
+                self.girar_derecha()
 
     def girar_derecha(self):
-        self.get_logger().info('Turning right.')
-        msg = Twist()
-        msg.linear.x = 0.0
-        msg.angular.z = -self.angular_velocity
-        self.publisher_.publish(msg)
-        time.sleep(self.rotation_duration)
-        self.stop_rotation()
+        self.get_logger().info('Girando a la derecha.')
+        self.rotar(-self.angular_velocity)
 
     def girar_izquierda(self):
-        self.get_logger().info('Turning left.')
+        self.get_logger().info('Girando a la izquierda.')
+        self.rotar(self.angular_velocity)
+
+    def rotar(self, angular_velocity):
+        self.rotating = True
         msg = Twist()
         msg.linear.x = 0.0
-        msg.angular.z = self.angular_velocity
+        msg.angular.z = angular_velocity
         self.publisher_.publish(msg)
         time.sleep(self.rotation_duration)
-        self.stop_rotation()
-
-    def dar_media_vuelta(self):
-        self.get_logger().info('Turning around.')
-        msg = Twist()
-        msg.linear.x = 0.0
-        msg.angular.z = self.angular_velocity
-        self.publisher_.publish(msg)
-        time.sleep(2 * self.rotation_duration)
         self.stop_rotation()
 
     def stop_rotation(self):
@@ -115,20 +93,25 @@ class WallFollower(Node):
         msg.linear.x = 0.0
         msg.angular.z = 0.0
         self.publisher_.publish(msg)
-        self.get_logger().info('Completed rotation.')
+        self.rotating = False
+        self.get_logger().info('Rotación completada.')
+
+    def avance_lineal(self):
+        msg = Twist()
+        msg.linear.x = self.linear_velocity
+        msg.angular.z = 0.0
+        self.publisher_.publish(msg)
+        self.get_logger().info('Avanzando en línea recta.')
         self.rotating = False
 
     def publish_control_signal(self, control_signal):
-        if not self.rotating:  # Only publish control signals if not rotating
+        if not self.rotating:
             msg = Twist()
-            # Set constant linear velocity
-            msg.linear.x = float(self.linear_velocity)  # Ensuring it's a float
-            # Set angular velocity based on control signal
-            msg.angular.z = float(control_signal)  # Ensuring it's a float
+            msg.linear.x = self.linear_velocity
+            msg.angular.z = control_signal
             if not math.isnan(control_signal):
                 self.publisher_.publish(msg)
-                self.get_logger().info(f'Published control signal to cmd_vel_nav topic. Angular velocity: {msg.angular.z}')
-
+                self.get_logger().info(f'Publicado señal de control: Angular velocity: {msg.angular.z}')
 
 def main(args=None):
     rclpy.init(args=args)
