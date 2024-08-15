@@ -30,7 +30,7 @@ class WallFollower(Node):
         self.previous_time = self.get_clock().now()
         self.linear_velocity = 0.5  # Velocidad lineal constante
         self.angular_velocity = math.pi / 4  # Velocidad angular para giros
-        self.rotation_duration = math.pi / 10 / self.angular_velocity  # Duración para girar 90 grados
+        self.rotation_duration = math.pi / 8.5 / self.angular_velocity  # Duración para girar 90 grados
 
         self.rotating = False
         self.get_logger().info('WallFollower node has been started.')
