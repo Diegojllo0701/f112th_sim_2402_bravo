@@ -24,7 +24,7 @@ class WallFollower(Node):
         
         self.publisher_ = self.create_publisher(Twist, 'cmd_vel_par', 10)
         self.Kp = 0.5  # Constante proporcional
-        self.Kd = 0.1  # Constante derivativa
+        self.Kd = 0  # Constante derivativa
         self.ki = 0.2  # Constante integrativa
         self.previous_error = 0.0
         self.previous_time = self.get_clock().now()
