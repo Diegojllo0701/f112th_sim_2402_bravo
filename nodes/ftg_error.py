@@ -15,7 +15,7 @@ class FollowTheGapNode(Node):
         self.safety_bubble_radius = self.declare_parameter('safety_bubble_radius', 1).value
         self.lidar_start_angle = self.declare_parameter('lidar_start_angle', -90).value
         self.lidar_end_angle = self.declare_parameter('lidar_end_angle', 90).value
-        self.gap_selection_mode = self.declare_parameter('gap_selection_mode', 'deepest').value
+        self.gap_selection_mode = self.declare_parameter('gap_selection_mode', 'widest').value
         self.gap_depth_threshold = self.declare_parameter('gap_depth_threshold', 1.0).value
         self.gap_width_threshold = self.declare_parameter('gap_width_threshold', 0.2).value
         self.no_gap_behavior = self.declare_parameter('no_gap_behavior', 'stop').value
