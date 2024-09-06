@@ -1,0 +1,6 @@
+{
+  "package_name": "f112th_sim_2402_bravo",
+  "non_idl_tuples": [
+    "/home/oscar/ros2_ws_2402/src/f112th_sim_2402_bravo:msg/AngleDistance.msg"
+  ]
+}

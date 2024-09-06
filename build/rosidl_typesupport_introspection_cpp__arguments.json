@@ -1,0 +1,25 @@
+{
+  "package_name": "f112th_sim_2402_bravo",
+  "output_dir": "/home/oscar/ros2_ws_2402/src/f112th_sim_2402_bravo/build/rosidl_typesupport_introspection_cpp/f112th_sim_2402_bravo",
+  "template_dir": "/opt/ros/humble/share/rosidl_typesupport_introspection_cpp/resource",
+  "idl_tuples": [
+    "/home/oscar/ros2_ws_2402/src/f112th_sim_2402_bravo/build/rosidl_adapter/f112th_sim_2402_bravo:msg/AngleDistance.idl"
+  ],
+  "ros_interface_dependencies": [
+    "builtin_interfaces:/opt/ros/humble/share/builtin_interfaces/msg/Duration.idl",
+    "builtin_interfaces:/opt/ros/humble/share/builtin_interfaces/msg/Time.idl"
+  ],
+  "target_dependencies": [
+    "/opt/ros/humble/lib/rosidl_typesupport_introspection_cpp/rosidl_typesupport_introspection_cpp",
+    "/opt/ros/humble/local/lib/python3.10/dist-packages/rosidl_typesupport_introspection_cpp/__init__.py",
+    "/opt/ros/humble/share/rosidl_typesupport_introspection_cpp/resource/idl__rosidl_typesupport_introspection_cpp.hpp.em",
+    "/opt/ros/humble/share/rosidl_typesupport_introspection_cpp/resource/idl__type_support.cpp.em",
+    "/opt/ros/humble/share/rosidl_typesupport_introspection_cpp/resource/msg__rosidl_typesupport_introspection_cpp.hpp.em",
+    "/opt/ros/humble/share/rosidl_typesupport_introspection_cpp/resource/msg__type_support.cpp.em",
+    "/opt/ros/humble/share/rosidl_typesupport_introspection_cpp/resource/srv__rosidl_typesupport_introspection_cpp.hpp.em",
+    "/opt/ros/humble/share/rosidl_typesupport_introspection_cpp/resource/srv__type_support.cpp.em",
+    "/home/oscar/ros2_ws_2402/src/f112th_sim_2402_bravo/build/rosidl_adapter/f112th_sim_2402_bravo/msg/AngleDistance.idl",
+    "/opt/ros/humble/share/builtin_interfaces/msg/Duration.idl",
+    "/opt/ros/humble/share/builtin_interfaces/msg/Time.idl"
+  ]
+}

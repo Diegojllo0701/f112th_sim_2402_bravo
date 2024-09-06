@@ -44,6 +44,7 @@ class EmergencyBrakeNode(Node):
 >>>>>>> main
         self.last_cmd_vel_par = Twist()
 
+
     def distance_callback(self, msg):
         # Guardar las distancias de -10°, 0°, 10° (posiciones 0, 1, 2)
         self.distances_front = [msg.distances_front[0], msg.distances_front[1], msg.distances_front[2]]

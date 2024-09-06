@@ -1,0 +1,18 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from f112th_sim_2402_bravo/msg/AngleDistance.msg
+// generated code does not contain a copyright notice
+
+
+module f112th_sim_2402_bravo {
+  module msg {
+    struct AngleDistance {
+      float distance_front;
+
+      float distance_back;
+
+      sequence<float> distances_right;
+
+      sequence<float> distances_left;
+    };
+  };
+};

@@ -1,0 +1,4 @@
+source;share/f112th_sim_2402_bravo/local_setup.bash
+source;share/f112th_sim_2402_bravo/local_setup.dsv
+source;share/f112th_sim_2402_bravo/local_setup.sh
+source;share/f112th_sim_2402_bravo/local_setup.zsh
