@@ -53,7 +53,10 @@ class WallFollower(Node):
             self.previous_error = current_error
             self.previous_time = current_time
 
-            self.publish_control_signal(control_signal)
+        # Update previous error and time
+        self.previous_error = current_error
+        self.previous_time = current_time
+        self.control_sig = control_signal
 
     def angle_distances_callback(self, msg):
         if not self.rotating:
