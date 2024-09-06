@@ -3,11 +3,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from f112th_sim_2402_bravo.msg import AngleDistance
-<<<<<<< HEAD
-from std_msgs.msg import Bool
-=======
 from std_msgs.msg import Bool  # Importar el tipo de mensaje Bool
->>>>>>> main
 
 class EmergencyBrakeNode(Node):
     def __init__(self):
@@ -33,15 +29,9 @@ class EmergencyBrakeNode(Node):
         # Publicación en el topic cmd_vel
         self.publisher_cmd_vel = self.create_publisher(Twist, 'cmd_vel', 10)
         
-<<<<<<< HEAD
-        # Publicación del estado de frenado
-        self.publisher_brake = self.create_publisher(Bool, 'brake_state', 10)
-        
-=======
         # Publicador para el estado del freno
         self.publisher_break_state = self.create_publisher(Bool, 'break_state', 10)
 
->>>>>>> main
         self.last_cmd_vel_par = Twist()
 
 
@@ -57,40 +47,23 @@ class EmergencyBrakeNode(Node):
     def check_and_publish_cmd_vel(self):
         if None not in self.distances_front:
             cmd_vel = Twist()
-<<<<<<< HEAD
-            brake_state = Bool()
-
-            # Verificar si alguna de las distancias es menor al umbral
-            if any(distance < self.ttc_threshold for distance in self.distances_front) and self.last_cmd_vel_par.linear.x > 0:
-                # Activar el freno de emergencia
-                cmd_vel.linear.x = float(0)
-                cmd_vel.angular.z = float(0)
-                brake_state.data = True
-=======
             break_state = Bool()
-
-            if self.distance_front < 1 and self.last_cmd_vel_par.linear.x > 0:
+            self.get_logger().info(f'Distances: {self.distances_front}')
+            if self.distances_front[1] < 1 and self.last_cmd_vel_par.linear.x > 0:
                 # Aplicar freno de emergencia
                 cmd_vel.linear.x = float(0)
                 cmd_vel.angular.z = float(self.last_cmd_vel_par.angular.z)
+                self.get_logger().warn('Emergency brake applied!')
                 break_state.data = True
->>>>>>> main
             else:
                 # Pasar los valores de cmd_vel_par a cmd_vel
                 cmd_vel.linear.x = float(self.last_cmd_vel_par.linear.x)
                 cmd_vel.angular.z = float(self.last_cmd_vel_par.angular.z)
-<<<<<<< HEAD
-                brake_state.data = False
-
-            # Publicar los valores de cmd_vel y el estado del freno
-            self.publisher_cmd_vel.publish(cmd_vel)
-            self.publisher_brake.publish(brake_state)
-=======
+                self.get_logger().info('Emergency brake not applied.')
                 break_state.data = False
 
             self.publisher_cmd_vel.publish(cmd_vel)
             self.publisher_break_state.publish(break_state)  # Publicar el estado del freno
->>>>>>> main
 
 def main(args=None):
     rclpy.init(args=args)
