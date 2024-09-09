@@ -60,8 +60,8 @@ class WallFollower(Node):
 
     def angle_distances_callback(self, msg):
         if not self.rotating:
-            distances_right = msg.distances_right[0]
-            distance_front = msg.distances_front[1]
+            distances_right = msg.distances_right[1]
+            distance_front = msg.distances_front[5]
             distance_left = msg.distances_left[0]
 
             # Log para depuración

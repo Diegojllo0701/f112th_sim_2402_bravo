@@ -21,10 +21,10 @@ class AngleDistancesReader(Node):
         
         # Use distances_right values as a and b
         if len(msg.distances_left) >= 2:
-            b = msg.distances_left[0]
-            a = msg.distances_left[1]
+            a = msg.distances_left[0]
+            b = msg.distances_left[1]
             CD,alpha = self.calculate_CD_distance(a, b)
-            error = self.calculate_error(CD,alpha,msg.distances_left[0])
+            error = self.calculate_error(CD,alpha,msg.distances_right[0])
             if error is not None:
                 self.get_logger().info(f'error_signal: {error}')
                 self.publish_error(error)
@@ -34,13 +34,13 @@ class AngleDistancesReader(Node):
             self.get_logger().warn('Not enough distances_right values to calculate CD distance.')
 
     def calculate_CD_distance(self, a, b):
-        angle1 = -80
-        angle2 = -90
+        angle1 = 80
+        angle2 = 90
 
         angle_diff_rad = math.radians(angle1 - angle2)
         sin_diff = math.sin(angle_diff_rad)
         cos_diff = math.cos(angle_diff_rad)
-        AC = 1
+        AC = 0.5
 
         # Compute alpha using the given formula
         if a<30 and b<30:
@@ -63,9 +63,9 @@ class AngleDistancesReader(Node):
         if distance_left < 4:
             target_distance = (distance_left + CD) /2
         else:
-            target_distance = 1.5
+            target_distance = 1.0
 
-        error = target_distance-CD
+        error = -(target_distance-CD)
         self.get_logger().info(f'Calculated error: {error}')    
         return error
 
