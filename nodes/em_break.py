@@ -37,7 +37,7 @@ class EmergencyBrakeNode(Node):
 
     def distance_callback(self, msg):
         # Guardar las distancias de -10°, 0°, 10° (posiciones 0, 1, 2)
-        self.distances_front = [msg.distances_front[0], msg.distances_front[1], msg.distances_front[2]]
+        self.distances_front = list(msg.distances_front)
         self.check_and_publish_cmd_vel()
 
     def cmd_vel_par_callback(self, msg):
@@ -48,22 +48,34 @@ class EmergencyBrakeNode(Node):
         if None not in self.distances_front:
             cmd_vel = Twist()
             break_state = Bool()
-            self.get_logger().info(f'Distances: {self.distances_front}')
-            if self.distances_front[1] < 1 and self.last_cmd_vel_par.linear.x > 0:
-                # Aplicar freno de emergencia
-                cmd_vel.linear.x = float(0)
+            #self.get_logger().info(f'Distances: {self.distances_front}')
+            
+            # Seleccionar distancias basadas en el ángulo de giro
+            if self.last_cmd_vel_par.angular.z < -0.2:  # Giro hacia la derecha
+                relevant_distances = self.distances_front[1:3]  # Priorizar los ángulos positivos
+            elif self.last_cmd_vel_par.angular.z > 0.2:  # Giro hacia la izquierda
+                relevant_distances = self.distances_front[7:9]  # Priorizar los ángulos negativos
+            else:  # Recto
+                relevant_distances = self.distances_front[4:6]  # Priorizar ángulos frontales (-20° a 20°)
+
+            # Tomar la distancia más cercana en la dirección de movimiento
+            min_distance = min(relevant_distances)
+            self.get_logger().info(f'Min distance: {min_distance}')
+            if min_distance < 0.6 and self.last_cmd_vel_par.linear.x > 0:
+                reverse_speed = -0.2  # Ajusta este valor según la capacidad de frenado del coche
+                cmd_vel.linear.x = reverse_speed
                 cmd_vel.angular.z = float(self.last_cmd_vel_par.angular.z)
-                self.get_logger().warn('Emergency brake applied!')
+                #self.get_logger().warn(f'Emergency brake applied with reverse speed {reverse_speed}!')
                 break_state.data = True
             else:
                 # Pasar los valores de cmd_vel_par a cmd_vel
                 cmd_vel.linear.x = float(self.last_cmd_vel_par.linear.x)
                 cmd_vel.angular.z = float(self.last_cmd_vel_par.angular.z)
-                self.get_logger().info('Emergency brake not applied.')
+                #self.get_logger().info('Emergency brake not applied.')
                 break_state.data = False
 
             self.publisher_cmd_vel.publish(cmd_vel)
-            self.publisher_break_state.publish(break_state)  # Publicar el estado del freno
+            self.publisher_break_state.publish(break_state)
 
 def main(args=None):
     rclpy.init(args=args)

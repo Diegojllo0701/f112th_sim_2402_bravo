@@ -28,7 +28,7 @@ class WallFollower(Node):
         self.ki = 0.2  # Constante integrativa
         self.previous_error = 0.0
         self.previous_time = self.get_clock().now()
-        self.linear_velocity = 0.5  # Velocidad lineal constante
+        self.linear_velocity = 0.25  # Velocidad lineal constante
         self.angular_velocity = math.pi / 4  # Velocidad angular para giros
         self.rotation_duration = math.pi / 8.5 / self.angular_velocity  # Duración para girar 90 grados
 
@@ -85,7 +85,7 @@ class WallFollower(Node):
     def rotar(self, angular_velocity):
         self.rotating = True
         msg = Twist()
-        msg.linear.x = 0.0
+        msg.linear.x = -0.3
         msg.angular.z = angular_velocity
         self.publisher_.publish(msg)
         time.sleep(self.rotation_duration)

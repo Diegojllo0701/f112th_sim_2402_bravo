@@ -68,7 +68,7 @@ class FollowTheGapNode(Node):
                 relevant_ranges[i] = 0
 
         # Step 3: Find the maximum gap
-        free_space_indices = np.where(relevant_ranges > 1.5)[0]
+        free_space_indices = np.where(relevant_ranges > 1.0)[0]
         if len(free_space_indices) == 0:
             self.handle_no_gaps()
             return
@@ -99,7 +99,7 @@ class FollowTheGapNode(Node):
             target_index = best_gap[len(best_gap) // 2]
 
         # Calculate the steering angle error
-        angle_to_target = self.index_to_angle(target_index, len(relevant_ranges))
+        angle_to_target = -self.index_to_angle(target_index, len(relevant_ranges))
         self.get_logger().info(f"Steering angle to target: {np.rad2deg(angle_to_target)} degrees")
         angle_error = np.clip(angle_to_target, -self.max_steering_angle, self.max_steering_angle)
 

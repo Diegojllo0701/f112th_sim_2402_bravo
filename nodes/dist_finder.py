@@ -20,9 +20,9 @@ class AngleDistancesReader(Node):
         self.get_logger().info('Received angle distances message.')
         
         # Use distances_right values as a and b
-        if len(msg.distances_right) >= 2:
-            b = msg.distances_right[0]
-            a = msg.distances_right[1]
+        if len(msg.distances_left) >= 2:
+            b = msg.distances_left[0]
+            a = msg.distances_left[1]
             CD,alpha = self.calculate_CD_distance(a, b)
             error = self.calculate_error(CD,alpha,msg.distances_left[0])
             if error is not None:

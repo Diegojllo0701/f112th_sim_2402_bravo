@@ -11,12 +11,12 @@ class DigitalPIDControllerNode(Node):
         super().__init__('digital_pid_controller_node')
 
         # Declare and initialize parameters
-        self.declare_parameter('kp', 3.0)  # Proportional gain
+        self.declare_parameter('kp', 1.0)  # Proportional gain
         self.declare_parameter('ki', 0)  # Integral gain
         self.declare_parameter('kd', 0)  # Derivative gain
-        self.declare_parameter('max_steering_angle', 8.0)  # Maximum steering angle (radians)
-        self.declare_parameter('max_velocity', 3.0)  # Maximum linear velocity (m/s)
-        self.declare_parameter('min_velocity', 2.0)  # Minimum linear velocity (m/s)
+        self.declare_parameter('max_steering_angle', 1.0)  # Maximum steering angle (radians)
+        self.declare_parameter('max_velocity', 0.3)  # Maximum linear velocity (m/s)
+        self.declare_parameter('min_velocity', 0.2)  # Minimum linear velocity (m/s)
         self.declare_parameter('sampling_time', 0.05)  # Sampling time (seconds)
 
         self.kp = self.get_parameter('kp').value
@@ -68,14 +68,14 @@ class DigitalPIDControllerNode(Node):
         # Regulate the velocity based on the error
         velocity = self.max_velocity - (abs(self.current_error) / self.max_steering_angle) * (self.max_velocity - self.min_velocity)
         velocity = max(velocity, self.min_velocity)
-        velocity= (velocity+self.previous_velocity)/2
-
+        
+    
         # Publish the velocity and steering commands
         twist_msg = Twist()
         twist_msg.linear.x = velocity
         twist_msg.angular.z = float(steering_angle)
         self.cmd_vel_publisher.publish(twist_msg)
-
+        self.get_logger().info(f"velocidad: {velocity}, steering: {steering_angle}")
         # Update previous error
         self.previous_error = self.current_error
 
