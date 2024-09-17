@@ -16,7 +16,8 @@ class ScanReader(Node):
         self.publisher_ = self.create_publisher(AngleDistance, 'angle_distances', 10)
 
     def scan_callback(self, msg):
-        angles_to_check = [-180, -90,-80,-50,-40,-30,-20,-10,0,10,20,30,40,50, 80,90]
+        # Agregar los ángulos que necesitas para los cálculos de 75°, 90° y 105° para la derecha
+        angles_to_check = [-180, -105, -90, -75, -10, 0, 10, 75, 90, 105]
         distances = self.get_distances_at_angles(msg, angles_to_check)
         self.get_logger().info('Distances at angles {}: {}'.format(angles_to_check, distances))
         self.publish_distances(distances)
@@ -28,25 +29,23 @@ class ScanReader(Node):
             angle_rad = angle * 3.14159265 / 180.0
             # Calculate the index
             index = int((angle_rad - msg.angle_min) / msg.angle_increment)
-            
-            # Debug information
-            #self.get_logger().info('Angle: {} degrees, {} radians, index: {}'.format(angle, angle_rad, index))
-            #self.get_logger().info('Angle min: {}, Angle max: {}, Angle increment: {}'.format(msg.angle_min, msg.angle_max, msg.angle_increment))
-            #self.get_logger().info('Range size: {}'.format(len(msg.ranges)))
 
             # Make sure the index is within the range of the array
             if 0 <= index < len(msg.ranges):
                 distances.append(msg.ranges[index])
             else:
-                distances.append(float('inf')) # If the index is out of range, append infinity
+                distances.append(float('inf'))  # If the index is out of range, append infinity
         return distances
 
     def publish_distances(self, distances):
         msg = AngleDistance()
+
+        # Ajuste de las distancias para izquierda, frente y derecha, asegurando 3 distancias para la derecha
         msg.distance_back = distances[0]
-        msg.distances_left = [distances[14], distances[15]]
-        msg.distances_front = [distances[3],distances[4],distances[5],distances[6],distances[7],distances[8],distances[9],distances[10],distances[11],distances[12],distances[13]]
-        msg.distances_right = [distances[1], distances[2]]
+        msg.distances_left = [distances[7], distances[8]]  # Ángulos 75° y 90°
+        msg.distances_front = [distances[4], distances[5], distances[6]]  # Ángulos -10°, 0°, 10°
+        msg.distances_right = [distances[1], distances[2], distances[3]]  # Ángulos 105°, 90°, 75°
+
         self.publisher_.publish(msg)
 
 def main(args=None):
