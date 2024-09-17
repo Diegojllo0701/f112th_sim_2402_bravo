@@ -4,8 +4,6 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32
 from geometry_msgs.msg import Twist
-from f112th_sim_2402_bravo.msg import AngleDistance  # Asegúrate de importar el mensaje correcto
-import time
 import math
 
 class WallFollower(Node):
@@ -18,12 +16,12 @@ class WallFollower(Node):
             10)
         
         self.publisher_ = self.create_publisher(Twist, 'cmd_vel_nav', 10)
-        self.Kp = 0.5  # Constante proporcional
+        self.Kp = 1  # Constante proporcional
         self.Kd = 0.1  # Constante derivativa
         self.ki = 0.2  # Constante integrativa
         self.previous_error = 0.0
         self.previous_time = self.get_clock().now()
-        self.linear_velocity = 0.25  # Velocidad lineal constante
+        self.linear_velocity = 0.5  # Velocidad lineal constante
         self.rotating = False
         self.get_logger().info('WallFollower node has been started.')
 
