@@ -19,60 +19,49 @@ class AngleDistancesReader(Node):
     def angle_distances_callback(self, msg):
         self.get_logger().info('Received angle distances message.')
         
-        # Use distances_right values as a and b
-        if len(msg.distances_right) >= 2:
-            a = msg.distances_right[1]
-            b = msg.distances_right[0]
-            CD,alpha = self.calculate_CD_distance(a, b)
-            error = self.calculate_error(CD,alpha,msg.distances_left[1])
+        # Uso de las distancias derecha para el cálculo (75°, 90°, 105°)
+        if len(msg.distances_right) >= 3:
+            d_75 = msg.distances_right[0]
+            d_90 = msg.distances_right[1]
+            d_105 = msg.distances_right[2]
+            
+            CD, alpha = self.calculate_CD_distance(d_75, d_105)
+            error = self.calculate_error(CD, alpha, d_90)
+            
             if error is not None:
                 self.get_logger().info(f'error_signal: {error}')
                 self.publish_error(error)
             else:
-                self.get_logger().warn(f'Could not calculate error signal.error_signal: {error}')
+                self.get_logger().warn(f'Could not calculate error signal.')
         else:
             self.get_logger().warn('Not enough distances_right values to calculate CD distance.')
 
-    def calculate_CD_distance(self, a, b):
-        angle1 = 80
-        angle2 = 90
+    def calculate_CD_distance(self, d_75, d_105):
+        angle_diff = math.radians(30)  # Diferencia entre 75° y 105°
 
-        angle_diff_rad = math.radians(angle1 - angle2)
-        sin_diff = math.sin(angle_diff_rad)
-        cos_diff = math.cos(angle_diff_rad)
-        AC = 1.5
-
-        # Compute alpha using the given formula
-        if a<30 and b<30:
+        if d_75 < 30 and d_105 < 30:
             try:
-                alpha = math.atan((a * cos_diff - b) / (a * sin_diff))
-                AB = b * math.cos(alpha)
-                CD = AB + AC * math.sin(alpha)#verificar signo
+                # Calcular el ángulo alpha
+                alpha = math.atan2(d_75 - d_105, 0.3)  # Distancia aproximada entre los puntos en el eje X
+                # Calcular la distancia CD a la pared como el promedio de d_75 y d_105
+                CD = (d_75 + d_105) / 2
                 self.get_logger().info(f'Calculated alpha: {alpha} radians, {math.degrees(alpha)} degrees, CD distance: {CD}')
                 return CD, alpha
             except ZeroDivisionError:
-                self.get_logger().error('ZeroDivisionError: sin_diff is zero, cannot calculate alpha.')
+                self.get_logger().error('ZeroDivisionError: Cannot calculate alpha.')
                 return None, None
         else:
-            CD = 1.0
-            alpha=0.1
-            return CD,alpha
+            return 0, 0.1  # Valores por defecto si las mediciones son erróneas
 
-
-    def calculate_error(self, CD, alpha,distance_left):
-        if distance_left < 4:
-           target_distance = (distance_left + CD) /2
-        else:
-            target_distance = 0.5
-
-        error = (target_distance-CD)
+    def calculate_error(self, CD, alpha, d_90):
+        target_distance = 0.75  # Distancia deseada de la pared
+        error = target_distance - CD
         self.get_logger().info(f'Calculated error: {error}')    
         return error
 
-
-    def publish_error(self, CD):
+    def publish_error(self, error):
         msg = Float32()
-        msg.data = CD
+        msg.data = error
         self.publisher_.publish(msg)
         self.get_logger().info('Published error to error_signal topic.')
 
