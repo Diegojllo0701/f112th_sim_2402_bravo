@@ -12,12 +12,12 @@ class DigitalPIDControllerNode(Node):
 
         # Declare and initialize parameters
         self.declare_parameter('kp', 1.0)  # Proportional gain
-        self.declare_parameter('ki', 0)  # Integral gain
-        self.declare_parameter('kd', 0)  # Derivative gain
+        self.declare_parameter('ki', 0.35)  # Integral gain
+        self.declare_parameter('kd', 0.0)  # Derivative gain
         self.declare_parameter('max_steering_angle', 1.0)  # Maximum steering angle (radians)
-        self.declare_parameter('max_velocity', 0.3)  # Maximum linear velocity (m/s)
-        self.declare_parameter('min_velocity', 0.2)  # Minimum linear velocity (m/s)
-        self.declare_parameter('sampling_time', 0.05)  # Sampling time (seconds)
+        self.declare_parameter('max_velocity', 0.32)  # Maximum linear velocity (m/s)
+        self.declare_parameter('min_velocity', 0.27)  # Minimum linear velocity (m/s)
+        self.declare_parameter('sampling_time', 0.025)  # Sampling time (seconds)
 
         self.kp = self.get_parameter('kp').value
         self.ki = self.get_parameter('ki').value

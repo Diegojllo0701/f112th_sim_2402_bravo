@@ -56,12 +56,12 @@ class EmergencyBrakeNode(Node):
             elif self.last_cmd_vel_par.angular.z > 0.2:  # Giro hacia la izquierda
                 relevant_distances = self.distances_front[7:9]  # Priorizar los ángulos negativos
             else:  # Recto
-                relevant_distances = self.distances_front[4:6]  # Priorizar ángulos frontales (-20° a 20°)
+                relevant_distances = self.distances_front[2:8]  # Priorizar ángulos frontales (-20° a 20°)
 
             # Tomar la distancia más cercana en la dirección de movimiento
             min_distance = min(relevant_distances)
             self.get_logger().info(f'Min distance: {min_distance}')
-            if min_distance < 0.6 and self.last_cmd_vel_par.linear.x > 0:
+            if min_distance < 0.5 and self.last_cmd_vel_par.linear.x > 0:
                 reverse_speed = -0.2  # Ajusta este valor según la capacidad de frenado del coche
                 cmd_vel.linear.x = reverse_speed
                 cmd_vel.angular.z = float(self.last_cmd_vel_par.angular.z)

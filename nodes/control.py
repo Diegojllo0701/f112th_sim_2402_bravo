@@ -23,16 +23,18 @@ class WallFollower(Node):
             10)
         
         self.publisher_ = self.create_publisher(Twist, 'cmd_vel_nav', 10)
-        self.Kp = 0.5  # Constante proporcional
-        self.Kd = 0  # Constante derivativa
-        self.ki = 0.2  # Constante integrativa
+        self.Kp = 2.5  # Constante proporcional
+        self.Kd = 0.0  # Constante derivativa
+        self.ki = 0.1  # Constante integrativa
         self.previous_error = 0.0
         self.previous_time = self.get_clock().now()
-        self.linear_velocity = 0.25  # Velocidad lineal constante
-        self.angular_velocity = math.pi / 4  # Velocidad angular para giros
-        self.rotation_duration = math.pi / 8.5 / self.angular_velocity  # Duración para girar 90 grados
-
+        self.linear_velocity = 0.28  # Velocidad lineal constante
+        self.angular_velocity = 1.0  # Velocidad angular para giros
+        self.rotation_duration = 0.0  # Duración para girar 90 grados
+        self.control_sig=0.0
         self.rotating = False
+        self.declare_parameter('sampling_time', 0.025)
+
         self.get_logger().info('WallFollower node has been started.')
 
     def wall_distance_callback(self, msg):
@@ -56,23 +58,25 @@ class WallFollower(Node):
         # Update previous error and time
         self.previous_error = current_error
         self.previous_time = current_time
-        self.control_sig = control_signal
+        self.control_sig = float(max(-0.5, min(0.5, control_signal)))
+    
 
     def angle_distances_callback(self, msg):
         if not self.rotating:
-            distances_right = msg.distances_right[1]
+            distances_right = msg.distances_right[0]
             distance_front = msg.distances_front[5]
-            distance_left = msg.distances_left[0]
+            distance_left = msg.distances_left[1]
 
             # Log para depuración
             self.get_logger().info(f'Right: {distances_right}, Front: {distance_front}, Left: {distance_left}')
                 
-            if distance_front > 0.8:  # No hay pared enfrente
+            if distance_front > 1.0:  # No hay pared enfrente
                 self.avance_lineal()
-            elif distance_left > (distances_right+distance_left)/2:  # Detecta un callejón a la izquierda
-                self.girar_izquierda()
-            elif distances_right > (distances_right+distance_left)/2:  # Mantener la distancia con la pared derecha
-                self.girar_derecha()
+            #elif distances_right > (distances_right+distance_left)/2:  # Mantener la distancia con la pared derecha
+             #   self.girar_derecha()
+            #elif distance_left > (distances_right+distance_left)/2:  # Detecta un callejón a la izquierda
+             #   self.girar_izquierda()
+
 
     def girar_derecha(self):
         self.get_logger().info('Girando a la derecha.')
@@ -85,7 +89,7 @@ class WallFollower(Node):
     def rotar(self, angular_velocity):
         self.rotating = True
         msg = Twist()
-        msg.linear.x = -0.3
+        msg.linear.x = 0.28
         msg.angular.z = angular_velocity
         self.publisher_.publish(msg)
         time.sleep(self.rotation_duration)
@@ -102,7 +106,7 @@ class WallFollower(Node):
     def avance_lineal(self):
         msg = Twist()
         msg.linear.x = self.linear_velocity
-        msg.angular.z = 0.0
+        msg.angular.z = self.control_sig
         self.publisher_.publish(msg)
         self.get_logger().info('Avanzando en línea recta.')
         self.rotating = False

@@ -20,11 +20,11 @@ class AngleDistancesReader(Node):
         self.get_logger().info('Received angle distances message.')
         
         # Use distances_right values as a and b
-        if len(msg.distances_left) >= 2:
-            a = msg.distances_left[0]
-            b = msg.distances_left[1]
+        if len(msg.distances_right) >= 2:
+            a = msg.distances_right[1]
+            b = msg.distances_right[0]
             CD,alpha = self.calculate_CD_distance(a, b)
-            error = self.calculate_error(CD,alpha,msg.distances_right[0])
+            error = self.calculate_error(CD,alpha,msg.distances_left[1])
             if error is not None:
                 self.get_logger().info(f'error_signal: {error}')
                 self.publish_error(error)
@@ -40,7 +40,7 @@ class AngleDistancesReader(Node):
         angle_diff_rad = math.radians(angle1 - angle2)
         sin_diff = math.sin(angle_diff_rad)
         cos_diff = math.cos(angle_diff_rad)
-        AC = 0.5
+        AC = 1.5
 
         # Compute alpha using the given formula
         if a<30 and b<30:
@@ -54,18 +54,18 @@ class AngleDistancesReader(Node):
                 self.get_logger().error('ZeroDivisionError: sin_diff is zero, cannot calculate alpha.')
                 return None, None
         else:
-            CD =0
+            CD = 1.0
             alpha=0.1
             return CD,alpha
 
 
     def calculate_error(self, CD, alpha,distance_left):
         if distance_left < 4:
-            target_distance = (distance_left + CD) /2
+           target_distance = (distance_left + CD) /2
         else:
-            target_distance = 1.0
+            target_distance = 0.5
 
-        error = -(target_distance-CD)
+        error = (target_distance-CD)
         self.get_logger().info(f'Calculated error: {error}')    
         return error
 

@@ -13,8 +13,8 @@ class FollowTheGapNode(Node):
         # Declare and assign parameters
         self.lidar_num_points = self.declare_parameter('lidar_num_points', 360).value
         self.safety_bubble_radius = self.declare_parameter('safety_bubble_radius', 1).value
-        self.lidar_start_angle = self.declare_parameter('lidar_start_angle', -90).value
-        self.lidar_end_angle = self.declare_parameter('lidar_end_angle', 90).value
+        self.lidar_start_angle = self.declare_parameter('lidar_start_angle', -100).value
+        self.lidar_end_angle = self.declare_parameter('lidar_end_angle', 100).value
         self.gap_selection_mode = self.declare_parameter('gap_selection_mode', 'widest').value
         self.gap_depth_threshold = self.declare_parameter('gap_depth_threshold', 1.0).value
         self.gap_width_threshold = self.declare_parameter('gap_width_threshold', 0.2).value
@@ -68,7 +68,7 @@ class FollowTheGapNode(Node):
                 relevant_ranges[i] = 0
 
         # Step 3: Find the maximum gap
-        free_space_indices = np.where(relevant_ranges > 1.0)[0]
+        free_space_indices = np.where(relevant_ranges > 3.0)[0]
         if len(free_space_indices) == 0:
             self.handle_no_gaps()
             return
