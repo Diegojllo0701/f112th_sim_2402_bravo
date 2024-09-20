@@ -28,21 +28,18 @@ class ScanReader(Node):
             angle_rad = angle * 3.14159265 / 180.0
             # Calculate the index
             index = int((angle_rad - msg.angle_min) / msg.angle_increment)
-            
-            # Debug information
-            #self.get_logger().info('Angle: {} degrees, {} radians, index: {}'.format(angle, angle_rad, index))
-            #self.get_logger().info('Angle min: {}, Angle max: {}, Angle increment: {}'.format(msg.angle_min, msg.angle_max, msg.angle_increment))
-            #self.get_logger().info('Range size: {}'.format(len(msg.ranges)))
 
             # Make sure the index is within the range of the array
             if 0 <= index < len(msg.ranges):
                 distances.append(msg.ranges[index])
             else:
-                distances.append(float('inf')) # If the index is out of range, append infinity
+                distances.append(float('inf'))  # If the index is out of range, append infinity
         return distances
 
     def publish_distances(self, distances):
         msg = AngleDistance()
+
+        # Ajuste de las distancias para izquierda, frente y derecha, asegurando 3 distancias para la derecha
         msg.distance_back = distances[0]
         msg.distances_left = [distances[16], distances[17]]
         msg.distances_front = [distances[5],distances[6],distances[7],distances[8],distances[9],distances[10],distances[11],distances[12],distances[13],distances[14],distances[15]]
