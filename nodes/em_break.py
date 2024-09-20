@@ -55,7 +55,7 @@ class EmergencyBrakeNode(Node):
                 relevant_distances = self.distances_front[1:3]  # Priorizar los ángulos positivos
             elif self.last_cmd_vel_par.angular.z > 0.2:  # Giro hacia la izquierda
                 relevant_distances = self.distances_front[7:9]  # Priorizar los ángulos negativos
-            else:  # Recto
+            else:  # distance
                 relevant_distances = self.distances_front[2:8]  # Priorizar ángulos frontales (-20° a 20°)
 
             # Tomar la distancia más cercana en la dirección de movimiento

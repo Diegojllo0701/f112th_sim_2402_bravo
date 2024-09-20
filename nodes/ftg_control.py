@@ -11,13 +11,13 @@ class DigitalPIDControllerNode(Node):
         super().__init__('digital_pid_controller_node')
 
         # Declare and initialize parameters
-        self.declare_parameter('kp', 1.0)  # Proportional gain
-        self.declare_parameter('ki', 0.35)  # Integral gain
-        self.declare_parameter('kd', 0.0)  # Derivative gain
+        self.declare_parameter('kp', 1.5)  # Proportional gain
+        self.declare_parameter('ki', 0.01)  # Integral gain
+        self.declare_parameter('kd', 0.3)  # Derivative gain
         self.declare_parameter('max_steering_angle', 1.0)  # Maximum steering angle (radians)
-        self.declare_parameter('max_velocity', 0.32)  # Maximum linear velocity (m/s)
-        self.declare_parameter('min_velocity', 0.27)  # Minimum linear velocity (m/s)
-        self.declare_parameter('sampling_time', 0.025)  # Sampling time (seconds)
+        self.declare_parameter('max_velocity', 0.44)  # Maximum linear velocity (m/s)
+        self.declare_parameter('min_velocity', 0.28)  # Minimum linear velocity (m/s)
+        self.declare_parameter('sampling_time', 0.1)  # Sampling time (seconds)
 
         self.kp = self.get_parameter('kp').value
         self.ki = self.get_parameter('ki').value
@@ -55,12 +55,15 @@ class DigitalPIDControllerNode(Node):
     def control_loop(self):
         # Calculate the PID control output
         proportional_term = self.kp * self.current_error
-        #self.integral_error += self.current_error * self.sampling_time
-        #integral_term = self.ki * self.integral_error
-        #derivative_term = self.kd * (self.current_error - self.previous_error) / self.sampling_time
+        self.integral_error += self.current_error * self.sampling_time
+        max_integral = 0.5  # Adjust as needed
+        self.integral_error = max(min(self.integral_error, max_integral), -max_integral)
+
+        integral_term = self.ki * self.integral_error
+        derivative_term = self.kd * (self.current_error - self.previous_error) / self.sampling_time
 
         # PID output (steering angle)
-        steering_angle = proportional_term #+ integral_term + derivative_term
+        steering_angle = proportional_term + integral_term + derivative_term
 
         # Limit the steering angle
         steering_angle = max(min(steering_angle, self.max_steering_angle), -self.max_steering_angle)

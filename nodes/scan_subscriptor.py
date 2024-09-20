@@ -16,9 +16,9 @@ class ScanReader(Node):
         self.publisher_ = self.create_publisher(AngleDistance, 'angle_distances', 10)
 
     def scan_callback(self, msg):
-        angles_to_check = [-180, -90,-80,-50,-40,-30,-20,-10,0,10,20,30,40,50, 80,90]
+        angles_to_check = [-180, -105, -90,-80,-75,-50,-40,-30,-20,-10,0,10,20,30,40,50, 80,90]
         distances = self.get_distances_at_angles(msg, angles_to_check)
-        self.get_logger().info('Distances at angles {}: {}'.format(angles_to_check, distances))
+        self.get_logger().info('Distances at front {}: {}'.format(angles_to_check, distances[10]))
         self.publish_distances(distances)
 
     def get_distances_at_angles(self, msg, angles):
@@ -44,9 +44,9 @@ class ScanReader(Node):
     def publish_distances(self, distances):
         msg = AngleDistance()
         msg.distance_back = distances[0]
-        msg.distances_left = [distances[14], distances[15]]
-        msg.distances_front = [distances[3],distances[4],distances[5],distances[6],distances[7],distances[8],distances[9],distances[10],distances[11],distances[12],distances[13]]
-        msg.distances_right = [distances[1], distances[2]]
+        msg.distances_left = [distances[16], distances[17]]
+        msg.distances_front = [distances[5],distances[6],distances[7],distances[8],distances[9],distances[10],distances[11],distances[12],distances[13],distances[14],distances[15]]
+        msg.distances_right = [distances[1],distances[2], distances[3],distances[4]]
         self.publisher_.publish(msg)
 
 def main(args=None):
