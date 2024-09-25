@@ -46,6 +46,7 @@ install(PROGRAMS
   nodes/em_break.py
   nodes/ftg_error.py
   nodes/ftg_control.py
+  nodes/tf2_control_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

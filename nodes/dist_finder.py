@@ -31,18 +31,19 @@ class AngleDistancesReader(Node):
         self.get_logger().info('Received angle distances message.')
         
         # Use a specific value from distances_front (e.g., middle index) for the check
-        if msg.distances_front[5] > 0.9:  # Using the middle front distance for the check
+        if msg.distances_front[5] > 0.5:  # Using the middle front distance for the check
             # Use the right-side distances (75°, 90°, 105°)
             if len(msg.distances_right) >= 3:
-                d_75 = msg.distances_right[1]
+                d_75 = msg.distances_right[2]
                 d_90 = msg.distances_right[1]
                 d_105 = msg.distances_right[0]
-                
+                self.get_logger().info(f'd_75: {d_75}, d_90: {d_90}, d_105: {d_105}')
                 CD, alpha = self.calculate_CD_distance(d_75, d_105,d_90)
+                self.get_logger().info(f'CD: {CD}, alpha: {alpha}')
                 error = self.calculate_error(CD, alpha, d_90)
                 
                 if error is not None:
-                    self.get_logger().info(f'error_signal: {error}')
+                    #self.get_logger().info(f'error_signal: {error}')
                     self.publish_error(error)
                     
                     # Update plot data
@@ -65,7 +66,7 @@ class AngleDistancesReader(Node):
                 alpha = math.atan2(d_75 - d_105, 0.3)  # Approximate distance between points in the X-axis
                 # Calculate the distance CD to the wall as the average of d_75 and d_105
                 CD = (d_75 + d_105) / 2
-                self.get_logger().info(f'Calculated alpha: {alpha} radians, {math.degrees(alpha)} degrees, CD distance: {CD}')
+                #self.get_logger().info(f'Calculated alpha: {alpha} radians, {math.degrees(alpha)} degrees, CD distance: {CD}')
                 return CD, alpha
             except ZeroDivisionError:
                 self.get_logger().error('ZeroDivisionError: Cannot calculate alpha.')
@@ -76,7 +77,7 @@ class AngleDistancesReader(Node):
     def calculate_error(self, CD, alpha, d_90):
         target_distance = 0.5  # Desired distance from the wall
         error = (target_distance - CD)
-        self.get_logger().info(f'Calculated error: {error}')
+        #self.get_logger().info(f'Calculated error: {error}')
         return error
 
     def publish_error(self, error):
