@@ -23,6 +23,8 @@ class WallFollower(Node):
         self.previous_time = self.get_clock().now()
         self.linear_velocity = 0.5  # Velocidad lineal constante
         self.rotating = False
+        self.declare_parameter('sampling_time', 0.025)
+
         self.get_logger().info('WallFollower node has been started.')
 
     def wall_distance_callback(self, msg):
