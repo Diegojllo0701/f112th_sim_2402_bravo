@@ -47,7 +47,7 @@ def generate_launch_description():
     twist_mux_node = Node(package='twist_mux', 
                     executable='twist_mux',
                     parameters=[twist_mux_params,{'use_sim_time': True}],
-                    remappings=[('/cmd_vel_out','/cmd_vel_par')]
+                    remappings=[('/cmd_vel_out','/cmd_vel')]
     )
     scan_reader_node = Node(
         package=package_name,  # Replace with your package name
@@ -67,6 +67,6 @@ def generate_launch_description():
         spawn_entity,
         joystick,
         twist_mux_node,
-        scan_reader_node,
-        emergency_brake_node,
+        #scan_reader_node,
+        #emergency_brake_node,
     ])

@@ -47,6 +47,7 @@ install(PROGRAMS
   nodes/ftg_error.py
   nodes/ftg_control.py
   nodes/tf2_control_node.py
+  nodes/navigation_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
