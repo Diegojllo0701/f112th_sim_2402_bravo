@@ -1,24 +1,39 @@
+---
 controller_manager:
   ros__parameters:
-    update_rate: 30
+    update_rate: 50
     use_sim_time: true
 
-    diff_cont:
-      type: diff_drive_controller/DiffDriveController
+    ackermann_controller:
+      type: ackermann_steering_controller/AckermannSteeringController
+      rear_wheel: 'rear_axle_joint'
+      front_steer: 'front_steer_joint'
+      publish_rate: 50.0
+      wheel_separation_h: 0.24
+      wheel_radius: 0.0375
+      cmd_vel_timeout: 0.25
+      base_frame_id: base_link
+      odom_frame_id: odom
 
-    joint_broad:
+      linear:
+        x:
+          has_velocity_limits: true
+          max_velocity: 1.0
+          min_velocity: -0.5
+          has_acceleration_limits: true
+          max_acceleration: 0.8
+          min_acceleration: -0.4
+          has_jerk_limits: true
+          max_jerk: 5.0
+
+      angular:
+        z:
+          has_velocity_limits: true
+          max_velocity: 1.7
+          has_acceleration_limits: true
+          max_acceleration: 1.5
+          has_jerk_limits: true
+          max_jerk: 2.5
+
+    joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
-
-diff_cont:
-  ros__parameters:
-
-    publish_rate: 50.0
-    
-    base_fame_id: base_link
-
-    left_wheel_names: ['left_wheel_joint']
-    right_wheel_names: ['right_wheel_joint']
-    wheel_separation: 0.35
-    wheel_radius: 0.05
-
-    use_stamped_vel: false
