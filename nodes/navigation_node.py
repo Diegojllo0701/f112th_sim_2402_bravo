@@ -5,17 +5,16 @@ from nav_msgs.msg import OccupancyGrid, Odometry
 from geometry_msgs.msg import PoseStamped, Twist
 from rclpy.qos import QoSProfile
 import numpy as np
-import matplotlib.pyplot as plt
-import heapq
 import math
+import heapq
 
 expansion_size = 1
 
 def euler_from_quaternion(x, y, z, w):
     # Convert quaternion to Euler angles (yaw)
-    t0 = +2.0 * (w * x + y * z)
-    t1 = +1.0 - 2.0 * (x * x + y * y)
-    yaw_z = math.atan2(t0, t1)
+    siny_cosp = 2.0 * (w * z + x * y)
+    cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
+    yaw_z = math.atan2(siny_cosp, cosy_cosp)
     return yaw_z
 
 def costmap(data, width, height, resolution):
@@ -57,13 +56,15 @@ def astar(array, start, goal):
         close_set.add(current)
         for i, j in neighbors:
             neighbor = current[0] + i, current[1] + j
-            if (0 <= neighbor[0] < array.shape[0] and
-                0 <= neighbor[1] < array.shape[1]):
-                if array[neighbor[0]][neighbor[1]] != 0:
+            tentative_g_score = gscore[current] + distance(current, neighbor)
+            if 0 <= neighbor[0] < array.shape[0]:
+                if 0 <= neighbor[1] < array.shape[1]:
+                    if array[neighbor[0]][neighbor[1]] != 0:
+                        continue
+                else:
                     continue
             else:
                 continue
-            tentative_g_score = gscore[current] + distance(current, neighbor)
             if neighbor in close_set and tentative_g_score >= gscore.get(neighbor, float('inf')):
                 continue
             if tentative_g_score < gscore.get(neighbor, float('inf')) or neighbor not in [i[1] for i in oheap]:
@@ -80,6 +81,7 @@ class NavigationNode(Node):
 
         self.goal_x = []
         self.goal_y = []
+        self.path_world = []  # Store path in world coordinates
 
         # Subscriptions
         self.subscription_map = self.create_subscription(
@@ -90,9 +92,18 @@ class NavigationNode(Node):
             Odometry, '/odom', self.odom_callback, 10)
         self.publisher = self.create_publisher(Twist, '/cmd_vel', 10)
 
-        # Robot's current position
+        # Robot's current position and orientation
         self.robot_pose_x = None
         self.robot_pose_y = None
+        self.robot_yaw = None
+
+        # Control parameters
+        self.look_ahead_distance = 1.0  # Adjust as necessary
+        self.max_linear_speed = 0.1    # Adjust as necessary
+        self.max_angular_speed = 3.0    # Adjust as necessary
+
+        # Timer for control loop
+        self.control_timer = None
 
     def OccGrid_callback(self, msg):
         self.resolution = msg.info.resolution
@@ -105,6 +116,9 @@ class NavigationNode(Node):
     def odom_callback(self, msg):
         self.robot_pose_x = msg.pose.pose.position.x
         self.robot_pose_y = msg.pose.pose.position.y
+        orientation_q = msg.pose.pose.orientation
+        self.robot_yaw = euler_from_quaternion(
+            orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w)
 
     def Goal_Pose_callback(self, msg):
         # Clear previous goals if starting a new navigation task
@@ -112,6 +126,9 @@ class NavigationNode(Node):
         if user_input.lower() == 'y':
             self.goal_x.clear()
             self.goal_y.clear()
+            self.path_world.clear()
+            if self.control_timer:
+                self.control_timer.cancel()
 
         self.goal_x.append(msg.pose.position.x)
         self.goal_y.append(msg.pose.position.y)
@@ -161,22 +178,78 @@ class NavigationNode(Node):
         path = astar(data_array, start, goal)
 
         if not path:
-            self.get_logger().error("No se encontró un camino válido.")
+            self.get_logger().error("No valid path found.")
             return
 
-        # Plotting the path
-        fig, ax = plt.subplots()
-        ax.imshow(data_array, cmap='gray')
+        # Convert path from grid indices to world coordinates
+        self.path_world = []
+        for row, col in path:
+            x = col * self.resolution + self.originX + self.resolution / 2.0
+            y = row * self.resolution + self.originY + self.resolution / 2.0
+            self.path_world.append((x, y))
 
-        # Extract x and y coordinates from path
-        y_coords, x_coords = zip(*path)
-        ax.plot(x_coords, y_coords, 'r-', linewidth=2)
+        # Start the control loop
+        self.control_timer = self.create_timer(0.1, self.pure_pursuit_control)
 
-        # Plot start and goal positions
-        ax.plot(start_column, start_row, 'go', markersize=5)  # Start position in green
-        ax.plot(goal_column, goal_row, 'bo', markersize=5)    # Goal position in blue
+    def pure_pursuit_control(self):
+        if not self.path_world or self.robot_pose_x is None or self.robot_pose_y is None:
+            return
 
-        plt.show()
+        # Current look-ahead point is the first point in path_world initially
+        if not hasattr(self, 'current_index'):
+            self.current_index = 0
+
+        # Check if the robot has reached the current look-ahead point
+        current_point = self.path_world[self.current_index]
+        dx = abs(current_point[0] - self.robot_pose_x)
+        dy = abs(current_point[1] - self.robot_pose_y)
+
+        # If both dx and dy are smaller than the threshold, go to the next point
+        if dx < 0.1 and dy < 0.1:  # Threshold of 0.1 meters
+            self.current_index += 1  # Move to the next point
+
+            # If we reached the end of the path, stop the robot
+            if self.current_index >= len(self.path_world):
+                self.get_logger().info("Goal reached!")
+                self._stop_robot()
+                return
+
+            current_point = self.path_world[self.current_index]  # Update to the new point
+
+        # Compute the steering angle to the current look-ahead point
+        dx = current_point[0] - self.robot_pose_x
+        dy = current_point[1] - self.robot_pose_y
+        angle_to_goal = math.atan2(dy, dx)
+
+        # Calculate the angle error
+        angle_error = angle_to_goal - self.robot_yaw
+        angle_error = math.atan2(math.sin(angle_error), math.cos(angle_error))  # Normalize
+
+        # Log debugging information
+        self.get_logger().info(f"Angle Error: {angle_error:.2f}")
+
+        # Compute control commands
+        linear_speed = self.max_linear_speed
+        angular_speed = self.max_angular_speed * angle_error
+
+        # Limit the angular speed
+        angular_speed = max(-self.max_angular_speed, min(self.max_angular_speed, angular_speed))
+
+        # Publish the velocity command
+        twist = Twist()
+        twist.linear.x = linear_speed
+        twist.angular.z = angular_speed
+        self.publisher.publish(twist)
+
+    def _stop_robot(self):
+        """Stop the robot and cancel the control timer."""
+        twist = Twist()
+        twist.linear.x = 0.0
+        twist.angular.z = 0.0
+        self.publisher.publish(twist)
+        self.control_timer.cancel()
+
+
 
 def main(args=None):
     rclpy.init(args=args)
