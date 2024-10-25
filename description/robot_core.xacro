@@ -26,6 +26,8 @@
         <child link="chassis"/>
         <origin xyz="-0.1 0 0"/>    
     </joint>
+    
+
 
     <!-- chassis link -->
     <link name="chassis">
@@ -46,6 +48,8 @@
             <origin xyz="0.15 0 0.075" rpy="0 0 0"/>
         </xacro:inertial_box>
     </link>
+
+
 
     <!-- left wheel joint -->
     <joint name="left_wheel_joint" type="continuous">
