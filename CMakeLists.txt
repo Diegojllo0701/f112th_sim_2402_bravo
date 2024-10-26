@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 project(f112th_sim_2402_bravo)
 
 # Default to C++14
@@ -18,13 +18,19 @@ find_package(rclpy REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(visualization_msgs REQUIRED)
-find_package(geometry_msgs REQUIRED)
 find_package(builtin_interfaces REQUIRED)
+find_package(visualization_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
+find_package(pcl_msgs REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io filters segmentation)
 
-# Generate messages
+# Include directories
+include_directories(
+  include
+  ${PCL_INCLUDE_DIRS}
+)
+
+# Generate ROS messages
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/AngleDistance.msg"
   "msg/Obstacles.msg"
@@ -37,10 +43,16 @@ add_executable(point_cloud_clustering_node nodes/point_cloud_clustering.cpp)
 # Link the required libraries to the executable
 ament_target_dependencies(point_cloud_clustering_node
   rclcpp
-  std_msgs
-  geometry_msgs
   sensor_msgs
-  PCL
+  std_msgs
+  visualization_msgs
+  pcl_conversions
+  pcl_msgs
+)
+
+# Link PCL libraries
+target_link_libraries(point_cloud_clustering_node
+  ${PCL_LIBRARIES}
 )
 
 # Install the C++ executable
@@ -67,6 +79,6 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
-# Export the package dependencies
+# Export package dependencies
 ament_export_dependencies(rosidl_default_runtime)
 ament_package()
