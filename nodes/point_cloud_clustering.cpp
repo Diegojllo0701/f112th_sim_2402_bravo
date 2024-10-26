@@ -1,5 +1,3 @@
-// point_cloud_clustering.cpp
-
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
@@ -9,13 +7,12 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
-
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/common/centroid.h>
 
-#include "obstacle_msgs/msg/obstacles.hpp"
+#include "custom_msgs/msg/obstacles.hpp"  // Correct header include
 
 #include <unordered_map>
 #include <vector>
@@ -28,6 +25,14 @@ public:
     geometry_msgs::msg::Point position;
     geometry_msgs::msg::Vector3 velocity;
     rclcpp::Time last_seen;
+
+    // Default constructor (required for unordered_map)
+    TrackedObstacle() : id(-1)
+    {
+        velocity.x = 0.0;
+        velocity.y = 0.0;
+        velocity.z = 0.0;
+    }
 
     TrackedObstacle(int obstacle_id, const geometry_msgs::msg::Point& pos, const rclcpp::Time& time)
         : id(obstacle_id), position(pos), last_seen(time)
@@ -54,7 +59,7 @@ public:
         marker_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("obstacle_clusters", 10);
 
         // Publisher for obstacle positions and velocities
-        obstacle_publisher_ = this->create_publisher<obstacle_msgs::msg::Obstacles>("detected_obstacles", 10);
+        obstacle_publisher_ = this->create_publisher<custom_msgs::msg::Obstacles>("detected_obstacles", 10);
 
         RCLCPP_INFO(this->get_logger(), "Point Cloud Clustering Node has been started.");
     }
@@ -233,12 +238,18 @@ private:
     void publishObstaclesAndMarkers(const rclcpp::Time& current_time)
     {
         visualization_msgs::msg::MarkerArray marker_array;
-        obstacle_msgs::msg::Obstacles obstacles_msg;
+        custom_msgs::msg::Obstacles obstacles_msg;
+
         obstacles_msg.header.frame_id = "map";  // Adjust the frame as necessary
         obstacles_msg.header.stamp = current_time;
 
         for (const auto& [id, obstacle] : tracked_obstacles_)
         {
+            // Add obstacle data to obstacles_msg
+            obstacles_msg.ids.push_back(id);
+            obstacles_msg.positions.push_back(obstacle.position);
+            obstacles_msg.velocities.push_back(obstacle.velocity);
+
             // Create a marker for visualization
             visualization_msgs::msg::Marker marker;
             marker.header.frame_id = "map";  // Adjust the frame as necessary
@@ -255,28 +266,22 @@ private:
             marker.scale.y = 0.5;
             marker.scale.z = 0.5;
 
-            // Set marker color (consistent for each obstacle)
             marker.color.r = 0.0f;
             marker.color.g = 1.0f;
             marker.color.b = 0.0f;
             marker.color.a = 0.8;
 
             marker.lifetime = rclcpp::Duration::from_seconds(0.5);
-
             marker_array.markers.push_back(marker);
-
-            // Add obstacle data to obstacles_msg
-            obstacles_msg.ids.push_back(id);
-            obstacles_msg.positions.push_back(obstacle.position);
-            obstacles_msg.velocities.push_back(obstacle.velocity);
         }
 
         // Publish the marker array
         marker_publisher_->publish(marker_array);
 
-        // Publish the obstacles with velocities
+        // Publish the obstacles message
         obstacle_publisher_->publish(obstacles_msg);
     }
+
 
     double euclideanDistance(const geometry_msgs::msg::Point& p1, const geometry_msgs::msg::Point& p2)
     {
@@ -289,7 +294,7 @@ private:
     // Member variables
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr point_cloud_subscriber_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_publisher_;
-    rclcpp::Publisher<obstacle_msgs::msg::Obstacles>::SharedPtr obstacle_publisher_;
+    rclcpp::Publisher<custom_msgs::msg::Obstacles>::SharedPtr obstacle_publisher_;
 
     int next_id_;
     std::unordered_map<int, TrackedObstacle> tracked_obstacles_;
