@@ -8,6 +8,9 @@ import numpy as np
 import math
 import heapq
 
+# Import the Obstacles message
+from f112th_sim_2402_bravo.msg import Obstacles  
+
 expansion_size = 1
 
 def euler_from_quaternion(x, y, z, w):
@@ -92,6 +95,10 @@ class NavigationNode(Node):
             Odometry, '/odom', self.odom_callback, 10)
         self.publisher = self.create_publisher(Twist, '/cmd_vel', 10)
 
+        # Subscribe to obstacle positions and velocities
+        self.subscription_obstacles = self.create_subscription(
+            Obstacles, 'detected_obstacles', self.obstacle_callback, 10)
+
         # Robot's current position and orientation
         self.robot_pose_x = None
         self.robot_pose_y = None
@@ -101,9 +108,13 @@ class NavigationNode(Node):
         self.look_ahead_distance = 1.0  # Adjust as necessary
         self.max_linear_speed = 0.1    # Adjust as necessary
         self.max_angular_speed = 3.0    # Adjust as necessary
+        self.safety_distance = 0.5  # Safety distance to obstacles
 
         # Timer for control loop
         self.control_timer = None
+
+        # Obstacle positions and velocities
+        self.obstacle_positions = []  # List of obstacles with positions and velocities
 
     def OccGrid_callback(self, msg):
         self.resolution = msg.info.resolution
@@ -120,6 +131,25 @@ class NavigationNode(Node):
         self.robot_yaw = euler_from_quaternion(
             orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w)
 
+    def obstacle_callback(self, msg):
+        # Update the list of obstacle positions and velocities
+        self.obstacle_positions = []
+        num_obstacles = len(msg.ids)
+        for idx in range(num_obstacles):
+            obstacle = {
+                'id': msg.ids[idx],
+                'x': msg.positions[idx].x,
+                'y': msg.positions[idx].y,
+                'vx': msg.velocities[idx].x,
+                'vy': msg.velocities[idx].y
+            }
+            self.obstacle_positions.append(obstacle)
+
+        # Replan if necessary
+        self.get_logger().info("Obstacles updated, checking for replanning...")
+        if self.control_timer:
+            self.get_map()
+
     def Goal_Pose_callback(self, msg):
         # Clear previous goals if starting a new navigation task
         user_input = input("Start a new navigation task? (y/n): ")
@@ -129,6 +159,7 @@ class NavigationNode(Node):
             self.path_world.clear()
             if self.control_timer:
                 self.control_timer.cancel()
+            self.current_index = 0  # Reset current index
 
         self.goal_x.append(msg.pose.position.x)
         self.goal_y.append(msg.pose.position.y)
@@ -143,6 +174,9 @@ class NavigationNode(Node):
 
         # Create the costmap from the map data
         data = costmap(self.map_data, self.width, self.height, self.resolution)
+
+        # Incorporate detected obstacles into the costmap
+        data = self.add_obstacles_to_costmap(data)
 
         # Convert goal and start positions to grid indices
         goal_column = int((self.goal_x[-1] - self.originX) / self.resolution)
@@ -189,7 +223,46 @@ class NavigationNode(Node):
             self.path_world.append((x, y))
 
         # Start the control loop
+        if self.control_timer:
+            self.control_timer.cancel()
         self.control_timer = self.create_timer(0.1, self.pure_pursuit_control)
+
+    def add_obstacles_to_costmap(self, data):
+        # Convert the costmap to a mutable numpy array
+        costmap_array = np.array(data, dtype=np.int8)
+
+        # Time horizon for prediction (seconds)
+        time_horizon = 1.0
+
+        # Loop over the obstacles and mark predicted positions in the costmap
+        for obs in self.obstacle_positions:
+            x = obs['x']
+            y = obs['y']
+            vx = obs['vx']
+            vy = obs['vy']
+
+            # Predict future position
+            x_future = x + vx * time_horizon
+            y_future = y + vy * time_horizon
+
+            # Convert future positions to grid indices
+            col = int((x_future - self.originX) / self.resolution)
+            row = int((y_future - self.originY) / self.resolution)
+
+            # Check bounds
+            if 0 <= row < self.height and 0 <= col < self.width:
+                # Mark the cell as occupied
+                costmap_array[row, col] = 100
+
+                # Optionally expand the obstacle in the costmap
+                for i in range(-expansion_size, expansion_size + 1):
+                    for j in range(-expansion_size, expansion_size + 1):
+                        r = row + i
+                        c = col + j
+                        if 0 <= r < self.height and 0 <= c < self.width:
+                            costmap_array[r, c] = 100
+
+        return costmap_array
 
     def pure_pursuit_control(self):
         if not self.path_world or self.robot_pose_x is None or self.robot_pose_y is None:
@@ -247,9 +320,8 @@ class NavigationNode(Node):
         twist.linear.x = 0.0
         twist.angular.z = 0.0
         self.publisher.publish(twist)
-        self.control_timer.cancel()
-
-
+        if self.control_timer:
+            self.control_timer.cancel()
 
 def main(args=None):
     rclpy.init(args=args)

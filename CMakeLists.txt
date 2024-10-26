@@ -1,11 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 project(f112th_sim_2402_bravo)
 
-# Default to C99
-if(NOT CMAKE_C_STANDARD)
-  set(CMAKE_C_STANDARD 99)
-endif()
-
 # Default to C++14
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 14)
@@ -15,28 +10,43 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# find dependencies
+# Find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(rclpy REQUIRED)
+find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(builtin_interfaces REQUIRED)
+find_package(pcl_conversions REQUIRED)
+find_package(PCL REQUIRED COMPONENTS common io filters segmentation)
 
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+# Generate messages
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/AngleDistance.msg"
+  "msg/Obstacles.msg"
+  DEPENDENCIES std_msgs geometry_msgs builtin_interfaces
+)
 
-if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  # the following line skips the linter which checks for copyrights
-  # uncomment the line when a copyright and license is not present in all source files
-  #set(ament_cmake_copyright_FOUND TRUE)
-  # the following line skips cpplint (only works in a git repo)
-  # uncomment the line when this package is not in a git repo
-  #set(ament_cmake_cpplint_FOUND TRUE)
-  ament_lint_auto_find_test_dependencies()
-endif()
+# Add the C++ executable
+add_executable(point_cloud_clustering_node nodes/point_cloud_clustering.cpp)
+
+# Link the required libraries to the executable
+ament_target_dependencies(point_cloud_clustering_node
+  rclcpp
+  std_msgs
+  geometry_msgs
+  sensor_msgs
+  PCL
+)
+
+# Install the C++ executable
+install(TARGETS point_cloud_clustering_node
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 # Install Python scripts
 install(PROGRAMS
@@ -51,15 +61,12 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# Install other directories
 install(
   DIRECTORY config description launch worlds
   DESTINATION share/${PROJECT_NAME}
 )
 
-rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/AngleDistance.msg"
-  DEPENDENCIES builtin_interfaces
-)
+# Export the package dependencies
 ament_export_dependencies(rosidl_default_runtime)
-find_package(sensor_msgs REQUIRED)
 ament_package()
