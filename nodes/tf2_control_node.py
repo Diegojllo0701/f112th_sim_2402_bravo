@@ -11,7 +11,7 @@ class TransformNode(Node):
         super().__init__('transform_node')
         self.br = TransformBroadcaster(self)
         self.subscription = self.create_subscription(
-            Twist, '/cmd_vel_joy', self.cmd_callback, 10)
+            Twist, 'bravo/cmd_vel', self.cmd_callback, 10)
         
         # Initialize variables for the moving frame
         self.current_x = 0.0

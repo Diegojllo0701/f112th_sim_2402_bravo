@@ -90,7 +90,7 @@ class NavigationNode(Node):
             PoseStamped, '/goal_pose', self.Goal_Pose_callback, QoSProfile(depth=10))
         self.subscription_odom = self.create_subscription(
             Odometry, '/odom', self.odom_callback, 10)
-        self.publisher = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.publisher = self.create_publisher(Twist, 'bravo/cmd_vel', 10)
 
         # Robot's current position and orientation
         self.robot_pose_x = None
