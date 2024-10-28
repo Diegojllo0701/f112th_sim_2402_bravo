@@ -2,37 +2,27 @@
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import OccupancyGrid, Odometry
-from geometry_msgs.msg import PoseStamped, Twist
+from geometry_msgs.msg import PoseStamped, Twist, Point, Vector3
+from std_msgs.msg import Header
 from rclpy.qos import QoSProfile
 import numpy as np
 import math
 import heapq
-import threading
+from threading import Lock
 
-# Import the Obstacles message
-from custom_msgs.msg import Obstacles  
+from custom_msgs.msg import Obstacles
 
-expansion_size = 1  # For expanding obstacles in the costmap
+expansion_size = 1
 
 def euler_from_quaternion(x, y, z, w):
-    """
-    Convert quaternion to Euler angles (yaw).
-    """
+    # Convertir cuaternión a ángulos de Euler (yaw)
     siny_cosp = 2.0 * (w * z + x * y)
     cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
     yaw_z = math.atan2(siny_cosp, cosy_cosp)
     return yaw_z
 
-def distance(a, b):
-    """
-    Calculate Euclidean distance between two points.
-    """
-    return math.sqrt((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2)
-
 def costmap(data, width, height, resolution):
-    """
-    Expand walls in the costmap based on the expansion_size.
-    """
+    # Expandir paredes en el costmap
     data = np.array(data).reshape(height, width)
     wall = np.where(data == 100)
     for i in range(-expansion_size, expansion_size + 1):
@@ -44,465 +34,275 @@ def costmap(data, width, height, resolution):
             data[x, y] = 100
     return data
 
-class PriorityQueue:
-    """
-    A priority queue that allows updating the priority of existing items.
-    """
-    def __init__(self):
-        self.elements = []
-        self.entry_finder = {}
-        self.REMOVED = '<removed-task>'
-        self.counter = 0
+def distance(a, b):
+    # Calcular distancia Euclidiana entre dos puntos
+    return np.sqrt((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2)
 
-    def push(self, item, priority):
-        if item in self.entry_finder:
-            self.remove_item(item)
-        count = self.counter
-        entry = [priority, count, item]
-        self.entry_finder[item] = entry
-        heapq.heappush(self.elements, entry)
-        self.counter += 1
+def astar(array, start, goal):
+    # Algoritmo de búsqueda A* para planificación de ruta
+    neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0),
+                (1, 1), (1, -1), (-1, 1), (-1, -1)]
+    close_set = set()
+    came_from = {}
+    gscore = {start: 0}
+    fscore = {start: distance(start, goal)}
+    oheap = []
+    heapq.heappush(oheap, (fscore[start], start))
 
-    def remove_item(self, item):
-        entry = self.entry_finder.pop(item)
-        entry[-1] = self.REMOVED
-
-    def pop(self):
-        while self.elements:
-            priority, count, item = heapq.heappop(self.elements)
-            if item is not self.REMOVED:
-                del self.entry_finder[item]
-                return priority, item
-        raise KeyError('pop from an empty priority queue')
-
-    def empty(self):
-        return not any(item[2] is not self.REMOVED for item in self.elements)
-
-class DStarLite:
-    """
-    Optimized implementation of the D* Lite algorithm for incremental path planning.
-    """
-    def __init__(self, start, goal, grid, heuristic=None):
-        self.start = start  # (row, col)
-        self.goal = goal    # (row, col)
-        self.grid = grid    # 2D numpy array representing the occupancy grid
-        self.heuristic = heuristic if heuristic else self.euclidean_distance
-
-        # Initialize g and rhs values
-        self.g = {}
-        self.rhs = {}
-        self.g[self.goal] = float('inf')
-        self.rhs[self.goal] = 0
-
-        # Initialize the priority queue
-        self.U = PriorityQueue()
-        self.U.push(self.goal, self.calculate_key(self.goal))
-
-    def euclidean_distance(self, a, b):
-        """
-        Heuristic function: Euclidean distance.
-        """
-        return math.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
-
-    def calculate_key(self, node):
-        """
-        Calculate the priority key for a node.
-        """
-        g_rhs = min(self.g.get(node, float('inf')), self.rhs.get(node, float('inf')))
-        return (g_rhs + self.heuristic(self.start, node), g_rhs)
-
-    def get_successors(self, node):
-        """
-        Get all reachable successors of a node.
-        """
-        neighbors = [(-1,0),(1,0),(0,-1),(0,1),
-                     (-1,-1),(-1,1),(1,-1),(1,1)]
-        successors = []
-        for d in neighbors:
-            succ = (node[0] + d[0], node[1] + d[1])
-            if 0 <= succ[0] < self.grid.shape[0] and 0 <= succ[1] < self.grid.shape[1]:
-                if self.grid[succ] == 0:  # Assuming 0 is free space
-                    successors.append(succ)
-        return successors
-
-    def get_predecessors(self, node):
-        """
-        Get all reachable predecessors of a node.
-        """
-        # In grid-based maps, predecessors are the same as successors
-        return self.get_successors(node)
-
-    def cost(self, a, b):
-        """
-        Return the cost of moving from node a to node b.
-        """
-        if self.grid[b] == 100:  # Assuming 100 is occupied
-            return float('inf')
-        return distance(a, b)
-
-    def update_vertex(self, u):
-        """
-        Update the vertex u in the planner.
-        """
-        if u != self.goal:
-            self.rhs[u] = min([self.g.get(s, float('inf')) + self.cost(u, s) for s in self.get_successors(u)])
-        self.U.push(u, self.calculate_key(u))
-
-    def compute_shortest_path(self):
-        """
-        Compute the shortest path using the D* Lite algorithm.
-        """
-        while not self.U.empty():
-            current_key, current_node = self.U.pop()
-            current_key_new = self.calculate_key(current_node)
-            if current_key < current_key_new:
-                self.U.push(current_node, current_key_new)
-                continue
-            if self.g.get(current_node, float('inf')) > self.rhs.get(current_node, float('inf')):
-                self.g[current_node] = self.rhs[current_node]
-                for s in self.get_successors(current_node):
-                    self.update_vertex(s)
+    while oheap:
+        current = heapq.heappop(oheap)[1]
+        if current == goal:
+            path = [current]
+            while current in came_from:
+                current = came_from[current]
+                path.append(current)
+            return path[::-1]
+        close_set.add(current)
+        for i, j in neighbors:
+            neighbor = current[0] + i, current[1] + j
+            tentative_g_score = gscore[current] + distance(current, neighbor)
+            if 0 <= neighbor[0] < array.shape[0]:
+                if 0 <= neighbor[1] < array.shape[1]:
+                    if array[neighbor[0]][neighbor[1]] != 0:
+                        continue
+                else:
+                    continue
             else:
-                self.g[current_node] = float('inf')
-                self.update_vertex(current_node)
-                for s in self.get_successors(current_node):
-                    self.update_vertex(s)
-
-    def get_path(self):
-        """
-        Extract the path from start to goal.
-        """
-        path = []
-        current = self.start
-        if self.g.get(current, float('inf')) == float('inf'):
-            return path  # No path exists
-
-        while current != self.goal:
-            path.append(current)
-            neighbors = self.get_successors(current)
-            if not neighbors:
-                return []  # No path exists
-            # Select the neighbor with the lowest g + cost
-            min_cost = float('inf')
-            next_node = current
-            for s in neighbors:
-                cost = self.g.get(s, float('inf')) + self.cost(current, s)
-                if cost < min_cost:
-                    min_cost = cost
-                    next_node = s
-            if next_node == current:
-                return []  # Stuck, no path
-            current = next_node
-        path.append(self.goal)
-        return path
+                continue
+            if neighbor in close_set and tentative_g_score >= gscore.get(neighbor, float('inf')):
+                continue
+            if tentative_g_score < gscore.get(neighbor, float('inf')) or neighbor not in [i[1] for i in oheap]:
+                came_from[neighbor] = current
+                gscore[neighbor] = tentative_g_score
+                fscore[neighbor] = tentative_g_score + distance(neighbor, goal)
+                heapq.heappush(oheap, (fscore[neighbor], neighbor))
+    return False
 
 class NavigationNode(Node):
-    """
-    ROS 2 Node for Navigation using D* Lite algorithm.
-    """
     def __init__(self):
         super().__init__('navigation_node')
-        self.get_logger().info('Navigation Node Started')
+        self.get_logger().info('Nodo de Navegación Iniciado')
 
         self.goal_x = []
         self.goal_y = []
-        self.path_world = []  # Store path in world coordinates
+        self.path_world = []  # Almacenar ruta en coordenadas del mundo
 
-        # Subscriptions
-        qos_profile = QoSProfile(depth=10)
+        # Suscripciones
         self.subscription_map = self.create_subscription(
-            OccupancyGrid, '/map', self.OccGrid_callback, qos_profile)
+            OccupancyGrid, '/map', self.OccGrid_callback, 10)
         self.subscription_goal = self.create_subscription(
-            PoseStamped, '/goal_pose', self.Goal_Pose_callback, qos_profile)
+            PoseStamped, '/goal_pose', self.Goal_Pose_callback, QoSProfile(depth=10))
         self.subscription_odom = self.create_subscription(
-            Odometry, '/odom', self.odom_callback, qos_profile)
-        self.publisher = self.create_publisher(Twist, '/cmd_vel', qos_profile)
-
-        # Subscribe to obstacle positions and velocities
+            Odometry, '/odom', self.odom_callback, 10)
         self.subscription_obstacles = self.create_subscription(
-            Obstacles, 'detected_obstacles', self.obstacle_callback, qos_profile)
+            Obstacles, '/detected_obstacles', self.obstacles_callback, 10)
 
-        # Robot's current position and orientation
+        self.publisher = self.create_publisher(Twist, '/cmd_vel', 10)
+
+        # Posición y orientación actuales del robot
         self.robot_pose_x = None
         self.robot_pose_y = None
         self.robot_yaw = None
 
-        # Control parameters
-        self.look_ahead_distance = 1.0  # Adjust as necessary
-        self.max_linear_speed = 0.1     # Adjust as necessary
-        self.max_angular_speed = 3.0    # Adjust as necessary
-        self.safety_distance = 0.5       # Safety distance to obstacles
+        # Parámetros de control
+        self.look_ahead_distance = 1.0  # Ajustar según sea necesario
+        self.max_linear_speed = 0.1      # Ajustar según sea necesario
+        self.max_angular_speed = 3.0     # Ajustar según sea necesario
 
-        # Timer for control loop
+        # Obstáculos dinámicos
+        self.dynamic_obstacles = []
+        self.obstacle_lock = Lock()
+
+        # Temporizador para el bucle de control
         self.control_timer = None
 
-        # Obstacle positions and velocities
-        self.obstacle_positions = []  # List of obstacles with positions and velocities
-
-        # D* Lite planner
-        self.planner = None  # Will be initialized when map and goal are available
-
-        # Store the static map for reference
-        self.static_map = None
-
-        # Lock for thread-safe operations
-        self.lock = threading.Lock()
-
     def OccGrid_callback(self, msg):
-        """
-        Callback for OccupancyGrid messages.
-        """
-        with self.lock:
-            self.resolution = msg.info.resolution
-            self.originX = msg.info.origin.position.x
-            self.originY = msg.info.origin.position.y
-            self.width = msg.info.width
-            self.height = msg.info.height
-            self.map_data = msg.data
+        self.resolution = msg.info.resolution
+        self.originX = msg.info.origin.position.x
+        self.originY = msg.info.origin.position.y
+        self.width = msg.info.width
+        self.height = msg.info.height
+        self.map_data = msg.data
 
-            # Convert map data to costmap with expanded obstacles
-            self.static_map = costmap(self.map_data, self.width, self.height, self.resolution)
-            self.grid = np.array(self.static_map)
+    def odom_callback(self, msg):
+        self.robot_pose_x = msg.pose.pose.position.x
+        self.robot_pose_y = msg.pose.pose.position.y
+        orientation_q = msg.pose.pose.orientation
+        self.robot_yaw = euler_from_quaternion(
+            orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w)
 
-            self.get_logger().info("Occupancy Grid received and processed.")
+    def Goal_Pose_callback(self, msg):
+        # Limpiar objetivos anteriores si se inicia una nueva tarea de navegación
+        user_input = input("¿Iniciar una nueva tarea de navegación? (y/n): ")
+        if user_input.lower() == 'y':
+            self.goal_x.clear()
+            self.goal_y.clear()
+            self.path_world.clear()
+            if self.control_timer:
+                self.control_timer.cancel()
 
-            # Initialize D* Lite planner if goal is already set and robot pose is known
-            if self.goal_x and self.goal_y and self.robot_pose_x is not None and self.robot_pose_y is not None:
-                self.initialize_planner()
+        self.goal_x.append(msg.pose.position.x)
+        self.goal_y.append(msg.pose.position.y)
+        if input("¿Más puntos de referencia? (y/n): ") == 'n':
+            self.get_map()
 
-    def initialize_planner(self):
-        """
-        Initialize the D* Lite planner with the current map and goal.
-        """
-        # Define start and goal positions in grid indices
-        start_col = int((self.robot_pose_x - self.originX) / self.resolution)
-        start_row = int((self.robot_pose_y - self.originY) / self.resolution)
-        goal_col = int((self.goal_x[-1] - self.originX) / self.resolution)
+    def obstacles_callback(self, msg):
+        with self.obstacle_lock:
+            self.dynamic_obstacles = []
+            for id, pos, vel in zip(msg.ids, msg.positions, msg.velocities):
+                self.dynamic_obstacles.append({
+                    'id': id,
+                    'position': (pos.x, pos.y),
+                    'velocity': (vel.x, vel.y)
+                })
+        self.get_logger().debug(f"Obstáculos dinámicos actualizados: {self.dynamic_obstacles}")
+
+    def get_map(self):
+        # Asegurarse de tener la posición actual del robot
+        if self.robot_pose_x is None or self.robot_pose_y is None:
+            self.get_logger().error("La posición actual del robot es desconocida.")
+            return
+
+        # Crear el costmap a partir de los datos del mapa
+        data = costmap(self.map_data, self.width, self.height, self.resolution)
+
+        # Integrar obstáculos dinámicos en el costmap
+        with self.obstacle_lock:
+            for obstacle in self.dynamic_obstacles:
+                x, y = obstacle['position']
+                grid_x = int((x - self.originX) / self.resolution)
+                grid_y = int((y - self.originY) / self.resolution)
+                # Asegurarse de que las coordenadas están dentro del mapa
+                if 0 <= grid_x < self.height and 0 <= grid_y < self.width:
+                    data[grid_x, grid_y] = 100  # Marcar como obstáculo
+
+        # Convertir posiciones de inicio y fin a índices de la cuadrícula
+        goal_column = int((self.goal_x[-1] - self.originX) / self.resolution)
         goal_row = int((self.goal_y[-1] - self.originY) / self.resolution)
+        start_column = int((self.robot_pose_x - self.originX) / self.resolution)
+        start_row = int((self.robot_pose_y - self.originY) / self.resolution)
 
-        start = (start_row, start_col)
-        goal = (goal_row, goal_col)
+        start = (start_row, start_column)
+        goal = (goal_row, goal_column)
 
-        # Check if start and goal are within bounds
-        if not (0 <= start_row < self.height and 0 <= start_col < self.width):
-            self.get_logger().error("Start position is out of bounds.")
+        # Verificar si el inicio y el objetivo están dentro de los límites
+        if not (0 <= start_row < self.height and 0 <= start_column < self.width):
+            self.get_logger().error("La posición de inicio está fuera de los límites.")
             return
 
-        if not (0 <= goal_row < self.height and 0 <= goal_col < self.width):
-            self.get_logger().error("Goal position is out of bounds.")
+        if not (0 <= goal_row < self.height and 0 <= goal_column < self.width):
+            self.get_logger().error("La posición del objetivo está fuera de los límites.")
             return
 
-        # Check if start or goal positions are in obstacles
-        if self.grid[start_row][start_col] != 0:
-            self.get_logger().error("Start position is in an obstacle.")
+        # Verificar si el inicio o el objetivo están en obstáculos
+        if data[start_row][start_column] != 0:
+            self.get_logger().error("La posición de inicio está en un obstáculo.")
             return
 
-        if self.grid[goal_row][goal_col] != 0:
-            self.get_logger().error("Goal position is in an obstacle.")
+        if data[goal_row][goal_column] != 0:
+            self.get_logger().error("La posición del objetivo está en un obstáculo.")
             return
 
-        # Initialize D* Lite planner
-        self.planner = DStarLite(start, goal, self.grid)
-        self.planner.compute_shortest_path()
-        self.path = self.planner.get_path()
-        self.get_logger().info(f"Path computed with {len(self.path)} nodes.")
+        # Convertir los datos a un array de numpy para A*
+        data_array = np.array(data)
 
-        if not self.path:
-            self.get_logger().error("No valid path found.")
+        # Encontrar la ruta utilizando A*
+        path = astar(data_array, start, goal)
+
+        if not path:
+            self.get_logger().error("No se encontró una ruta válida.")
             return
 
-        # Convert path to world coordinates
+        # Convertir la ruta de índices de cuadrícula a coordenadas del mundo
         self.path_world = []
-        for row, col in self.path:
+        for row, col in path:
             x = col * self.resolution + self.originX + self.resolution / 2.0
             y = row * self.resolution + self.originY + self.resolution / 2.0
             self.path_world.append((x, y))
 
-        self.get_logger().info("Path converted to world coordinates.")
+        self.get_logger().info(f"Ruta planificada con {len(self.path_world)} puntos.")
 
-        # Start the control loop
-        if self.control_timer:
-            self.control_timer.cancel()
+        # Iniciar el bucle de control
         self.control_timer = self.create_timer(0.1, self.pure_pursuit_control)
 
-    def odom_callback(self, msg):
-        """
-        Callback for Odometry messages to update robot's pose.
-        """
-        with self.lock:
-            self.robot_pose_x = msg.pose.pose.position.x
-            self.robot_pose_y = msg.pose.pose.position.y
-            orientation_q = msg.pose.pose.orientation
-            self.robot_yaw = euler_from_quaternion(
-                orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w)
-            self.get_logger().debug(f"Updated robot pose to ({self.robot_pose_x}, {self.robot_pose_y}) with yaw {self.robot_yaw:.2f}")
-
-    def obstacle_callback(self, msg):
-        """
-        Callback for Obstacles messages to update obstacle positions and velocities.
-        """
-        with self.lock:
-            # Update the list of obstacle positions and velocities
-            self.obstacle_positions = []
-            num_obstacles = len(msg.ids)
-            for idx in range(num_obstacles):
-                obstacle = {
-                    'id': msg.ids[idx],
-                    'x': msg.positions[idx].x,
-                    'y': msg.positions[idx].y,
-                    'vx': msg.velocities[idx].x,
-                    'vy': msg.velocities[idx].y
-                }
-                self.obstacle_positions.append(obstacle)
-
-            self.get_logger().info("Obstacles updated, checking for replanning...")
-
-            # Replan if necessary
-            if self.planner:
-                self.update_costmap()
-                self.planner.compute_shortest_path()
-                self.path = self.planner.get_path()
-                self.get_logger().info(f"Path updated with {len(self.path)} nodes.")
-
-                if not self.path:
-                    self.get_logger().error("No valid path found after replanning.")
-                    return
-
-                # Convert path to world coordinates
-                self.path_world = []
-                for row, col in self.path:
-                    x = col * self.resolution + self.originX + self.resolution / 2.0
-                    y = row * self.resolution + self.originY + self.resolution / 2.0
-                    self.path_world.append((x, y))
-
-    def Goal_Pose_callback(self, msg):
-        """
-        Callback for Goal Pose messages to set new navigation goals.
-        """
-        with self.lock:
-            goal = msg.pose.position
-            self.goal_x.append(goal.x)
-            self.goal_y.append(goal.y)
-            self.get_logger().info(f"Received new goal: ({goal.x}, {goal.y})")
-
-            # Initialize planner if possible
-            if self.static_map is not None and self.robot_pose_x is not None and self.robot_pose_y is not None:
-                self.initialize_planner()
-
-    def update_costmap(self):
-        """
-        Incorporate detected obstacles into the costmap by predicting their future positions.
-        Filters out obstacles that coincide with static walls.
-        """
-        # Time horizon for prediction (seconds)
-        time_horizon = 1.0
-
-        # Loop over the obstacles and mark predicted positions in the costmap
-        for obs in self.obstacle_positions:
-            x = obs['x']
-            y = obs['y']
-            vx = obs['vx']
-            vy = obs['vy']
-
-            # Predict future position
-            x_future = x + vx * time_horizon
-            y_future = y + vy * time_horizon
-
-            # Convert future positions to grid indices
-            col = int((x_future - self.originX) / self.resolution)
-            row = int((y_future - self.originY) / self.resolution)
-
-            # Check bounds
-            if 0 <= row < self.height and 0 <= col < self.width:
-                # Check if the cell is already occupied in the static map (wall)
-                if self.static_map[row, col] == 100:
-                    continue  # Skip marking to avoid redundant replanning due to walls
-
-                # Mark the cell as occupied for dynamic obstacles
-                self.grid[row, col] = 100
-
-                # Optionally expand the obstacle in the costmap
-                for i in range(-expansion_size, expansion_size + 1):
-                    for j in range(-expansion_size, expansion_size + 1):
-                        r = row + i
-                        c = col + j
-                        if 0 <= r < self.height and 0 <= c < self.width:
-                            if self.static_map[r, c] != 100:  # Avoid overwriting static walls
-                                self.grid[r, c] = 100
-
-        # Update the planner's grid with the new dynamic obstacles
-        self.planner.grid = self.grid
-
     def pure_pursuit_control(self):
-        """
-        Control loop using Pure Pursuit algorithm to follow the planned path.
-        """
-        with self.lock:
-            if not self.path_world or self.robot_pose_x is None or self.robot_pose_y is None:
-                return
+        if not self.path_world or self.robot_pose_x is None or self.robot_pose_y is None:
+            return
 
-            # Current look-ahead point is the first point in path_world initially
-            if not hasattr(self, 'current_index'):
-                self.current_index = 0
+        # Punto de mira actual es el primer punto en path_world inicialmente
+        if not hasattr(self, 'current_index'):
+            self.current_index = 0
 
-            # Check if the robot has reached the current look-ahead point
+        # Verificar si el robot ha alcanzado el punto de mira actual
+        current_point = self.path_world[self.current_index]
+        dx = abs(current_point[0] - self.robot_pose_x)
+        dy = abs(current_point[1] - self.robot_pose_y)
+
+        # Si ambas dx y dy son menores que el umbral, ir al siguiente punto
+        if dx < 0.1 and dy < 0.1:  # Umbral de 0.1 metros
+            self.current_index += 1  # Pasar al siguiente punto
+
+            # Si se llegó al final de la ruta, detener el robot
             if self.current_index >= len(self.path_world):
-                self.get_logger().info("Goal reached!")
+                self.get_logger().info("¡Objetivo alcanzado!")
                 self._stop_robot()
                 return
 
-            current_point = self.path_world[self.current_index]
-            dx = abs(current_point[0] - self.robot_pose_x)
-            dy = abs(current_point[1] - self.robot_pose_y)
+            current_point = self.path_world[self.current_index]  # Actualizar al nuevo punto
 
-            # If both dx and dy are smaller than the threshold, go to the next point
-            if dx < 0.1 and dy < 0.1:  # Threshold of 0.1 meters
-                self.current_index += 1  # Move to the next point
+        # Verificar si hay obstáculos dinámicos cerca del camino
+        if self.is_obstacle_in_path():
+            self.get_logger().warn("Obstáculo dinámico detectado en el camino. Re-planificando...")
+            self.get_map()  # Re-planificar la ruta
+            return
 
-                # If we reached the end of the path, stop the robot
-                if self.current_index >= len(self.path_world):
-                    self.get_logger().info("Goal reached!")
-                    self._stop_robot()
-                    return
+        # Calcular el ángulo de dirección al punto de mira actual
+        dx = current_point[0] - self.robot_pose_x
+        dy = current_point[1] - self.robot_pose_y
+        angle_to_goal = math.atan2(dy, dx)
 
-                current_point = self.path_world[self.current_index]  # Update to the new point
+        # Calcular el error angular
+        angle_error = angle_to_goal - self.robot_yaw
+        angle_error = math.atan2(math.sin(angle_error), math.cos(angle_error))  # Normalizar
 
-            # Compute the steering angle to the current look-ahead point
-            dx = current_point[0] - self.robot_pose_x
-            dy = current_point[1] - self.robot_pose_y
-            angle_to_goal = math.atan2(dy, dx)
+        # Información de depuración
+        self.get_logger().debug(f"Error Angular: {angle_error:.2f}")
 
-            # Calculate the angle error
-            angle_error = angle_to_goal - self.robot_yaw
-            angle_error = math.atan2(math.sin(angle_error), math.cos(angle_error))  # Normalize
+        # Calcular comandos de control
+        linear_speed = self.max_linear_speed
+        angular_speed = self.max_angular_speed * angle_error
 
-            # Log debugging information
-            self.get_logger().debug(f"Angle Error: {angle_error:.2f}")
+        # Limitar la velocidad angular
+        angular_speed = max(-self.max_angular_speed, min(self.max_angular_speed, angular_speed))
 
-            # Compute control commands
-            linear_speed = self.max_linear_speed
-            angular_speed = self.max_angular_speed * angle_error
+        # Publicar el comando de velocidad
+        twist = Twist()
+        twist.linear.x = linear_speed
+        twist.angular.z = angular_speed
+        self.publisher.publish(twist)
 
-            # Limit the angular speed
-            angular_speed = max(-self.max_angular_speed, min(self.max_angular_speed, angular_speed))
-
-            # Publish the velocity command
-            twist = Twist()
-            twist.linear.x = linear_speed
-            twist.angular.z = angular_speed
-            self.publisher.publish(twist)
+    def is_obstacle_in_path(self):
+        """
+        Verifica si hay obstáculos dinámicos cerca de la ruta actual.
+        Puedes ajustar el radio de detección según tus necesidades.
+        """
+        detection_radius = 0.5  # metros
+        with self.obstacle_lock:
+            for obstacle in self.dynamic_obstacles:
+                ox, oy = obstacle['position']
+                dist = distance((self.robot_pose_x, self.robot_pose_y), (ox, oy))
+                if dist < detection_radius:
+                    return True
+        return False
 
     def _stop_robot(self):
-        """
-        Stop the robot and cancel the control timer.
-        """
+        """Detiene el robot y cancela el temporizador de control."""
         twist = Twist()
         twist.linear.x = 0.0
         twist.angular.z = 0.0
         self.publisher.publish(twist)
         if self.control_timer:
             self.control_timer.cancel()
-        self.get_logger().info("Robot stopped.")
 
 def main(args=None):
     rclpy.init(args=args)
@@ -510,8 +310,10 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("Navigation node terminated by user.")
-    rclpy.shutdown()
+        node.get_logger().info('Navegación interrumpida por el usuario.')
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
