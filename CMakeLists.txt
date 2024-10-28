@@ -22,18 +22,19 @@ find_package(pcl_conversions REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(pcl_msgs REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io filters segmentation)
-find_package(custom_msgs REQUIRED)  # Add custom_msgs dependency
+find_package(custom_msgs REQUIRED)  # Ensure custom_msgs is found
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(Eigen3 REQUIRED)
 
-# Generate only the AngleDistance.msg message
-rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/AngleDistance.msg"
-  DEPENDENCIES std_msgs builtin_interfaces
-)
+
 
 # Include directories
 include_directories(
   include
   ${PCL_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIRS}
 )
 
 # Add the C++ executable
@@ -49,11 +50,18 @@ ament_target_dependencies(point_cloud_clustering_node
   pcl_conversions
   pcl_msgs
   custom_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+  PCL
+  Eigen3
 )
 
 # Link PCL libraries
 target_link_libraries(point_cloud_clustering_node
   ${PCL_LIBRARIES}
+  ${tf2_LIBRARIES}
+  Eigen3::Eigen
 )
 
 # Install the C++ executable
