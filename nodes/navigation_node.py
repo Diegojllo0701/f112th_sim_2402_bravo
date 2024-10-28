@@ -85,11 +85,11 @@ class NavigationNode(Node):
 
         # Subscriptions
         self.subscription_map = self.create_subscription(
-            OccupancyGrid, '/map', self.OccGrid_callback, 10)
+            OccupancyGrid, '/bravo/map', self.OccGrid_callback, 10)
         self.subscription_goal = self.create_subscription(
-            PoseStamped, '/goal_pose', self.Goal_Pose_callback, QoSProfile(depth=10))
+            PoseStamped, '/bravo/goal_pose', self.Goal_Pose_callback, QoSProfile(depth=10))
         self.subscription_odom = self.create_subscription(
-            Odometry, '/odom', self.odom_callback, 10)
+            Odometry, '/bravo/odom', self.odom_callback, 10)
         self.publisher = self.create_publisher(Twist, 'bravo/cmd_vel', 10)
 
         # Robot's current position and orientation
