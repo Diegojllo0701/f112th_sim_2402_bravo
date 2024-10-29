@@ -22,6 +22,9 @@
 #include <vector>
 #include <cmath>
 #include <deque>
+#include <unordered_set>
+#include <utility>      // Para std::pair
+#include <functional>   // Para std::hash
 
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
@@ -29,6 +32,14 @@
 
 // Include Eigen for transformation matrices
 #include <Eigen/Dense>
+
+// Definir la estructura 'pair_hash' en el ámbito global
+struct pair_hash {
+    std::size_t operator () (const std::pair<int, int>& p) const {
+        // Combinar los hashes de los dos enteros
+        return std::hash<int>()(p.first) ^ (std::hash<int>()(p.second) << 1);
+    }
+};
 
 class TrackedObstacle
 {
@@ -123,7 +134,7 @@ public:
 
         // Subscriber to point cloud data
         point_cloud_subscriber_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-            "/camera/points",  // Adjust this to your point cloud topic
+            "/camera/points",  // Ajusta este tópico según tu configuración
             10,
             std::bind(&PointCloudClusteringNode::pointCloudCallback, this, std::placeholders::_1));
 
@@ -133,57 +144,76 @@ public:
         // Publisher for obstacle positions and velocities
         obstacle_publisher_ = this->create_publisher<custom_msgs::msg::Obstacles>("detected_obstacles", 10);
 
-        RCLCPP_INFO(this->get_logger(), "Point Cloud Clustering Node has been started.");
+        // Publisher for filtered points
+        filtered_pointcloud_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("filtered_points", 10);
+
+        RCLCPP_INFO(this->get_logger(), "Point Cloud Clustering Node ha sido iniciado.");
     }
 
 private:
     void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
-        RCLCPP_INFO(this->get_logger(), "Point cloud frame ID: %s", msg->header.frame_id.c_str());
+        RCLCPP_INFO(this->get_logger(), "Frame ID del point cloud: %s", msg->header.frame_id.c_str());
 
-        // Convert the ROS message to a PCL point cloud
+        // Convertir el mensaje ROS a un point cloud de PCL
         pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_cloud(new pcl::PointCloud<pcl::PointXYZ>);
         pcl::fromROSMsg(*msg, *pcl_cloud);
 
-        // Check if point cloud is empty
+        // Verificar si el point cloud está vacío
         if (pcl_cloud->empty())
         {
-            RCLCPP_WARN(this->get_logger(), "Received empty point cloud.");
+            RCLCPP_WARN(this->get_logger(), "Se recibió un point cloud vacío.");
             return;
         }
 
-        // Transform the point cloud to the 'odom' frame
+        // Transformar el point cloud al frame 'odom'
         pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud = transformPointCloudToOdom(pcl_cloud, msg->header.stamp);
         if (transformed_cloud->empty())
         {
-            RCLCPP_WARN(this->get_logger(), "Transformed point cloud is empty.");
+            RCLCPP_WARN(this->get_logger(), "El point cloud transformado está vacío.");
             return;
         }
 
-        // Apply PassThrough filter on the z-axis to remove floor points (z < 0.25)
+        // Aplicar filtro PassThrough en el eje z para eliminar puntos del piso
         pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_cloud(new pcl::PointCloud<pcl::PointXYZ>);
         pcl::PassThrough<pcl::PointXYZ> pass;
         pass.setInputCloud(transformed_cloud);
         pass.setFilterFieldName("z");
-        pass.setFilterLimits(0.25, 1.5);  // Remove points below 0.25
+        pass.setFilterLimits(0.25, 2.0);  // Eliminar puntos por debajo de 0.25m y por encima de 1.5m
         pass.filter(*filtered_cloud);
 
         if (filtered_cloud->empty())
         {
-            RCLCPP_WARN(this->get_logger(), "Filtered point cloud is empty after PassThrough.");
+            RCLCPP_WARN(this->get_logger(), "Point cloud filtrado está vacío después del PassThrough.");
             return;
         }
+
+        // Eliminar puntos con coordenadas (x, y) muy similares
+        pcl::PointCloud<pcl::PointXYZ>::Ptr unique_filtered_cloud = removeDuplicatePoints(filtered_cloud, 0.05);  // Tolerancia de 5 cm
+
+        if (unique_filtered_cloud->empty())
+        {
+            RCLCPP_WARN(this->get_logger(), "Point cloud filtrado único está vacío después de eliminar duplicados.");
+            return;
+        }
+
+        // Publicar los puntos filtrados únicos
+        sensor_msgs::msg::PointCloud2 filtered_msg;
+        pcl::toROSMsg(*unique_filtered_cloud, filtered_msg);
+        filtered_msg.header.frame_id = "odom";
+        filtered_msg.header.stamp = msg->header.stamp;
+        filtered_pointcloud_publisher_->publish(filtered_msg);
 
         // Downsample the point cloud using a voxel grid filter
         pcl::PointCloud<pcl::PointXYZ>::Ptr downsampled_cloud(new pcl::PointCloud<pcl::PointXYZ>);
         pcl::VoxelGrid<pcl::PointXYZ> voxel_filter;
-        voxel_filter.setInputCloud(filtered_cloud);
-        voxel_filter.setLeafSize(0.1f, 0.1f, 0.1f);  // Adjust the leaf size as needed
+        voxel_filter.setInputCloud(unique_filtered_cloud);
+        voxel_filter.setLeafSize(0.1f, 0.1f, 0.1f);  // Ajusta el tamaño de la hoja según sea necesario
         voxel_filter.filter(*downsampled_cloud);
 
         if (downsampled_cloud->empty())
         {
-            RCLCPP_WARN(this->get_logger(), "Downsampled point cloud is empty.");
+            RCLCPP_WARN(this->get_logger(), "Point cloud downsampled está vacío.");
             return;
         }
 
@@ -193,11 +223,11 @@ private:
 
         if (cluster_indices.empty())
         {
-            RCLCPP_WARN(this->get_logger(), "No clusters found.");
+            RCLCPP_WARN(this->get_logger(), "No se encontraron clusters.");
             return;
         }
 
-        // Update obstacle tracking with the message timestamp
+        // Actualizar el seguimiento de obstáculos con la marca de tiempo del mensaje
         updateObstacleTracking(downsampled_cloud, cluster_indices, msg->header.stamp);
     }
 
@@ -205,7 +235,7 @@ private:
         const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
         const rclcpp::Time& stamp)
     {
-        // Lookup the transform from 'camera_link_optical' to 'odom' at the time of the message
+        // Buscar la transformación de 'camera_link_optical' a 'odom' en el tiempo del mensaje
         geometry_msgs::msg::TransformStamped transform_stamped;
         try
         {
@@ -213,52 +243,82 @@ private:
         }
         catch (tf2::TransformException &ex)
         {
-            RCLCPP_WARN(this->get_logger(), "Could not get transform: %s", ex.what());
+            RCLCPP_WARN(this->get_logger(), "No se pudo obtener la transformación: %s", ex.what());
             return pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
         }
 
-        // Extract translation
+        // Extraer la traslación
         float tx = transform_stamped.transform.translation.x;
         float ty = transform_stamped.transform.translation.y;
         float tz = transform_stamped.transform.translation.z;
 
-        // Extract rotation as a quaternion
+        // Extraer la rotación como un cuaternión
         float qx = transform_stamped.transform.rotation.x;
         float qy = transform_stamped.transform.rotation.y;
         float qz = transform_stamped.transform.rotation.z;
         float qw = transform_stamped.transform.rotation.w;
 
-        // Convert quaternion to Eigen::Quaternionf
+        // Convertir el cuaternión a Eigen::Quaternionf
         Eigen::Quaternionf q(qw, qx, qy, qz);
 
-        // Create transformation matrix
+        // Crear la matriz de transformación
         Eigen::Affine3f transform = Eigen::Affine3f::Identity();
         transform.translation() << tx, ty, tz;
         transform.rotate(q);
 
-        // Transform the point cloud
+        // Transformar el point cloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud(new pcl::PointCloud<pcl::PointXYZ>);
         pcl::transformPointCloud(*cloud, *transformed_cloud, transform);
 
         return transformed_cloud;
     }
 
+    pcl::PointCloud<pcl::PointXYZ>::Ptr removeDuplicatePoints(
+        const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
+        double tolerance)
+    {
+        pcl::PointCloud<pcl::PointXYZ>::Ptr unique_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+
+        // Crear una cuadrícula espacial para eliminar duplicados
+        std::unordered_set<std::pair<int, int>, pair_hash> grid;
+
+        for (const auto& point : cloud->points)
+        {
+            int x_idx = static_cast<int>(std::floor(point.x / tolerance));
+            int y_idx = static_cast<int>(std::floor(point.y / tolerance));
+
+            std::pair<int, int> grid_idx = {x_idx, y_idx};
+
+            if (grid.find(grid_idx) == grid.end())
+            {
+                grid.insert(grid_idx);
+                unique_cloud->points.emplace_back(point);
+            }
+        }
+
+        unique_cloud->width = unique_cloud->points.size();
+        unique_cloud->height = 1;
+        unique_cloud->is_dense = true;
+
+        return unique_cloud;
+    }
+
     void performClustering(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, std::vector<pcl::PointIndices>& cluster_indices)
     {
-        // Create a KD-Tree for the clustering algorithm
+        // Crear un árbol KD para el algoritmo de clustering
         pcl::search::KdTree<pcl::PointXYZ>::Ptr kd_tree(new pcl::search::KdTree<pcl::PointXYZ>);
         kd_tree->setInputCloud(cloud);
 
-        // Set up the Euclidean Cluster Extraction
+        // Configurar la extracción de clusters Euclidianos
         pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-        ec.setClusterTolerance(0.25);  // Tolerance in meters (adjust as needed)
-        ec.setMinClusterSize(25);      // Minimum number of points to form a cluster
-        ec.setMaxClusterSize(2000);    // Maximum number of points in a cluster
+        ec.setClusterTolerance(0.20);  // Tolerancia en metros (ajusta según sea necesario)
+        ec.setMinClusterSize(10);      // Número mínimo de puntos para formar un cluster
+        ec.setMaxClusterSize(2000);    // Número máximo de puntos en un cluster
         ec.setSearchMethod(kd_tree);
         ec.setInputCloud(cloud);
         ec.extract(cluster_indices);
 
-        RCLCPP_INFO(this->get_logger(), "Found %zu clusters.", cluster_indices.size());
+        RCLCPP_INFO(this->get_logger(), "Encontrados %zu clusters.", cluster_indices.size());
     }
 
     void updateObstacleTracking(
@@ -268,10 +328,10 @@ private:
     {
         rclcpp::Time current_time = msg_stamp;
 
-        // List of detected obstacle positions in the current frame
+        // Lista de posiciones de obstáculos detectados en el frame actual
         std::vector<geometry_msgs::msg::Point> detected_positions;
 
-        // Calculate centroids of clusters
+        // Calcular centroides de los clusters
         for (const auto& indices : cluster_indices)
         {
             Eigen::Vector4f centroid;
@@ -279,7 +339,7 @@ private:
 
             geometry_msgs::msg::Point position;
 
-            // Use the centroid coordinates directly (already in 'odom' frame)
+            // Usar las coordenadas del centroid directamente (ya están en el frame 'odom')
             position.x = centroid[0];
             position.y = centroid[1];
             position.z = centroid[2];
@@ -287,25 +347,25 @@ private:
             detected_positions.push_back(position);
         }
 
-        // Assign clusters to tracked obstacles
+        // Asignar clusters a obstáculos rastreados
         assignClustersToObstacles(detected_positions, current_time);
 
-        // Remove obstacles not seen for a while
+        // Eliminar obstáculos que no han sido vistos por un tiempo
         removeLostObstacles(current_time);
 
-        // Publish obstacles and markers
+        // Publicar obstáculos y marcadores
         publishObstaclesAndMarkers(current_time);
     }
 
     void assignClustersToObstacles(const std::vector<geometry_msgs::msg::Point>& detected_positions, const rclcpp::Time& current_time)
     {
-        // Parameters
-        const double max_match_distance = 0.5;  // Maximum distance to consider a match (adjust as needed)
+        // Parámetros
+        const double max_match_distance = 0.5;  // Distancia máxima para considerar una coincidencia (ajusta según sea necesario)
 
-        // Create a list of unmatched detected positions
+        // Crear una lista de posiciones detectadas sin asignar
         std::vector<bool> matched(detected_positions.size(), false);
 
-        // For each tracked obstacle, try to find the nearest detected position
+        // Para cada obstáculo rastreado, intentar encontrar la posición detectada más cercana
         for (auto& obstacle_pair : tracked_obstacles_)
         {
             TrackedObstacle& obstacle = obstacle_pair.second;
@@ -327,13 +387,13 @@ private:
 
             if (min_distance < max_match_distance)
             {
-                // Update obstacle position and velocity using the enhanced method
+                // Actualizar la posición y velocidad del obstáculo
                 obstacle.updatePosition(detected_positions[best_match], current_time);
                 matched[best_match] = true;
             }
         }
 
-        // Add new obstacles for unmatched detections
+        // Añadir nuevos obstáculos para detecciones sin asignar
         for (size_t i = 0; i < detected_positions.size(); ++i)
         {
             if (!matched[i])
@@ -347,7 +407,7 @@ private:
 
     void removeLostObstacles(const rclcpp::Time& current_time)
     {
-        const double obstacle_timeout = 2.0;  // Seconds to keep an obstacle after last seen (adjust as needed)
+        const double obstacle_timeout = 2.0;  // Segundos para mantener un obstáculo después de no ser visto (ajusta según sea necesario)
         std::vector<int> obstacles_to_remove;
         for (const auto& obstacle_pair : tracked_obstacles_)
         {
@@ -371,7 +431,7 @@ private:
         visualization_msgs::msg::MarkerArray marker_array;
         custom_msgs::msg::Obstacles obstacles_msg;
 
-        obstacles_msg.header.frame_id = "odom";  // Using "odom" frame
+        obstacles_msg.header.frame_id = "odom";  // Usando el frame "odom"
         obstacles_msg.header.stamp = current_time;
 
         for (const auto& obstacle_pair : tracked_obstacles_)
@@ -379,14 +439,14 @@ private:
             int id = obstacle_pair.first;
             const TrackedObstacle& obstacle = obstacle_pair.second;
 
-            // Add obstacle data to obstacles_msg
+            // Añadir datos del obstáculo al mensaje obstacles_msg
             obstacles_msg.ids.push_back(id);
             obstacles_msg.positions.push_back(obstacle.position);
             obstacles_msg.velocities.push_back(obstacle.velocity);
 
-            // Create a marker for visualization
+            // Crear un marcador para visualización
             visualization_msgs::msg::Marker marker;
-            marker.header.frame_id = "odom";  // Using "odom" frame
+            marker.header.frame_id = "odom";  // Usando el frame "odom"
             marker.header.stamp = current_time;
             marker.ns = "clusters";
             marker.id = id;
@@ -409,10 +469,10 @@ private:
             marker_array.markers.push_back(marker);
         }
 
-        // Publish the marker array
+        // Publicar el array de marcadores
         marker_publisher_->publish(marker_array);
 
-        // Publish the obstacles message
+        // Publicar el mensaje de obstáculos
         obstacle_publisher_->publish(obstacles_msg);
     }
 
@@ -428,6 +488,7 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr point_cloud_subscriber_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_publisher_;
     rclcpp::Publisher<custom_msgs::msg::Obstacles>::SharedPtr obstacle_publisher_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr filtered_pointcloud_publisher_;
 
     int next_id_;
     std::unordered_map<int, TrackedObstacle> tracked_obstacles_;
