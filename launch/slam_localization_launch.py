@@ -40,9 +40,9 @@ def generate_launch_description():
             {'use_sim_time': use_sim_time}
         ],
         remappings=[
-            ('/map', 'map'),
-            ('/odom', 'odom'),
-            ('/goal_pose', 'goal_pose')
+            ('/map', 'bravo/map'),
+            ('/odom', 'bravo/odom'),
+            ('/goal_pose', 'bravo/goal_pose')
         ]
     )
 
