@@ -179,7 +179,7 @@ private:
         pcl::PassThrough<pcl::PointXYZ> pass;
         pass.setInputCloud(transformed_cloud);
         pass.setFilterFieldName("z");
-        pass.setFilterLimits(0.25, 2.0);  // Eliminar puntos por debajo de 0.25m y por encima de 1.5m
+        pass.setFilterLimits(0.28, 2.0);  // Eliminar puntos por debajo de 0.25m y por encima de 1.5m
         pass.filter(*filtered_cloud);
 
         if (filtered_cloud->empty())
@@ -313,7 +313,7 @@ private:
         pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
         ec.setClusterTolerance(0.20);  // Tolerancia en metros (ajusta según sea necesario)
         ec.setMinClusterSize(10);      // Número mínimo de puntos para formar un cluster
-        ec.setMaxClusterSize(2000);    // Número máximo de puntos en un cluster
+        ec.setMaxClusterSize(1000);    // Número máximo de puntos en un cluster
         ec.setSearchMethod(kd_tree);
         ec.setInputCloud(cloud);
         ec.extract(cluster_indices);

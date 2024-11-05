@@ -13,7 +13,7 @@ from threading import Lock
 from rclpy.qos import QoSProfile
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from visualization_msgs.msg import Marker, MarkerArray  # Para RViz, si decides usarlo
+from visualization_msgs.msg import Marker, MarkerArray  # Para RViz
 from scipy.ndimage import binary_dilation  # Para la expansión de obstáculos
 import time
 
@@ -32,12 +32,12 @@ def distance(a, b):
     """
     return np.sqrt((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2)
 
-def astar(array, start, goal):
+def astar(array, start, goal, occupied_threshold):
     """
     Algoritmo de búsqueda A* para planificación de ruta.
     """
     neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0),
-                (1, 1), (1, -1), (-1, 1), (-1, -1)]
+                 (1, 1), (1, -1), (-1, 1), (-1, -1)]
     close_set = set()
     came_from = {}
     gscore = {start: 0}
@@ -59,7 +59,8 @@ def astar(array, start, goal):
             tentative_g_score = gscore[current] + distance(current, neighbor)
             if 0 <= neighbor[0] < array.shape[0]:
                 if 0 <= neighbor[1] < array.shape[1]:
-                    if array[neighbor[0]][neighbor[1]] != 0:
+                    cell_value = array[neighbor[0]][neighbor[1]]
+                    if cell_value > occupied_threshold or cell_value == -1:
                         continue
                 else:
                     continue
@@ -73,6 +74,57 @@ def astar(array, start, goal):
                 fscore[neighbor] = tentative_g_score + distance(neighbor, goal)
                 heapq.heappush(oheap, (fscore[neighbor], neighbor))
     return False
+
+# Clase KalmanFilter para manejar el filtro de Kalman de cada obstáculo
+class KalmanFilter:
+    def __init__(self, initial_state, initial_covariance):
+        self.x = initial_state  # Vector de estado [x, y, vx, vy]
+        self.P = initial_covariance  # Matriz de covarianza
+        # Matriz de transición de estado (se actualizará según delta_t)
+        self.F = np.eye(4)
+        # Matriz de observación
+        self.H = np.eye(4)
+        # Covarianza del ruido del proceso
+        self.Q = np.eye(4) * 0.1
+        # Covarianza del ruido de medición
+        self.R = np.eye(4) * 0.5
+
+    def predict(self, delta_t):
+        # Actualizar la matriz F según delta_t
+        self.F = np.array([
+            [1, 0, delta_t, 0],
+            [0, 1, 0, delta_t],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1]
+        ])
+        # Predecir el siguiente estado
+        self.x = self.F @ self.x
+        # Predecir la siguiente covarianza
+        self.P = self.F @ self.P @ self.F.T + self.Q
+
+    def predict_state(self, delta_t):
+        # Predecir el estado futuro sin modificar el estado actual
+        F = np.array([
+            [1, 0, delta_t, 0],
+            [0, 1, 0, delta_t],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1]
+        ])
+        future_x = F @ self.x
+        return future_x
+
+    def update(self, z):
+        # Residual de la medición
+        y = z - self.H @ self.x
+        # Covarianza residual
+        S = self.H @ self.P @ self.H.T + self.R
+        # Ganancia de Kalman
+        K = self.P @ self.H.T @ np.linalg.inv(S)
+        # Actualizar la estimación del estado
+        self.x = self.x + K @ y
+        # Actualizar la estimación de la covarianza
+        I = np.eye(self.x.shape[0])
+        self.P = (I - K @ self.H) @ self.P
 
 class NavigationNode(Node):
     def __init__(self):
@@ -110,23 +162,38 @@ class NavigationNode(Node):
         self.robot_yaw = None
 
         # Parámetros de control
-        self.look_ahead_distance = 1.5  # Ajustar según sea necesario
         self.max_linear_speed = 0.2      # Ajustar según sea necesario
         self.max_angular_speed = 1.5     # Ajustar según sea necesario
 
         # Parámetros de predicción
-        self.declare_parameter('prediction_time_horizon', 2.0)  # Tiempo en segundos para predecir posiciones futuras
+        self.declare_parameter('prediction_time_horizon', 0.2)  # Tiempo en segundos para predecir posiciones futuras
         self.declare_parameter('prediction_time_step', 0.5)    # Intervalo de tiempo entre predicciones
-        self.declare_parameter('dynamic_obstacle_expansion', 3)  # Tamaño de expansión basado en velocidad y robot
-        self.declare_parameter('raw_point_ttl', 30.0)  # Tiempo en segundos para que los puntos crudos expiren
+        self.declare_parameter('dynamic_obstacle_expansion', 1)  # Tamaño de expansión basado en velocidad y robot
+        self.declare_parameter('raw_point_ttl', 7.0)  # Tiempo en segundos para que los puntos crudos expiren
 
         # Parámetro para habilitar/deshabilitar la visualización
         self.declare_parameter('enable_visualization', True)
         self.enable_visualization = self.get_parameter('enable_visualization').get_parameter_value().bool_value
 
+        # Umbral para considerar una celda como ocupada
+        self.declare_parameter('occupied_threshold', 50)  # Puedes ajustar este valor según tus necesidades
+        self.occupied_threshold = self.get_parameter('occupied_threshold').get_parameter_value().integer_value
+
+        # Nuevo parámetro para el error angular máximo
+        self.declare_parameter('max_angular_error', 1.0)  # Umbral máximo de error angular en radianes
+        self.max_angular_error = self.get_parameter('max_angular_error').get_parameter_value().double_value
+
+        # Parámetro para la distancia de anticipación en Pure Pursuit
+        self.declare_parameter('look_ahead_distance', 0.5)  # Ajusta este valor según tus necesidades
+        self.look_ahead_distance = self.get_parameter('look_ahead_distance').get_parameter_value().double_value
+
         # Obstáculos dinámicos
         self.dynamic_obstacles = []
         self.obstacle_lock = Lock()
+
+        # Diccionarios para los filtros de Kalman y tiempos de último avistamiento
+        self.kalman_filters = {}  # Diccionario para almacenar filtros de Kalman por obstáculo
+        self.obstacle_last_seen = {}  # Rastrea el último tiempo visto de cada obstáculo
 
         # Puntos crudos filtrados con timestamps
         self.filtered_points = []  # Lista de tuples: (x, y, timestamp)
@@ -149,9 +216,9 @@ class NavigationNode(Node):
         # Bandera para verificar si el mapa ha sido recibido
         self.map_received = False
 
-        self.declare_parameter('kp', 1.0)  # Ganancia Proporcional
+        self.declare_parameter('kp', 1.5)  # Ganancia Proporcional
         self.declare_parameter('ki', 0.0)  # Ganancia Integral
-        self.declare_parameter('kd', 0.1)  # Ganancia Derivativa
+        self.declare_parameter('kd', 0.05)  # Ganancia Derivativa
 
         self.kp = self.get_parameter('kp').get_parameter_value().double_value
         self.ki = self.get_parameter('ki').get_parameter_value().double_value
@@ -233,23 +300,55 @@ class NavigationNode(Node):
         """
         Callback para manejar la recepción de obstáculos detectados.
         """
+        current_time = self.get_clock().now().seconds_nanoseconds()[0] + \
+                       self.get_clock().now().seconds_nanoseconds()[1] * 1e-9
         with self.obstacle_lock:
-            self.dynamic_obstacles = []
             for id, pos, vel in zip(msg.ids, msg.positions, msg.velocities):
-                self.dynamic_obstacles.append({
-                    'id': id,
-                    'position': (pos.x, pos.y),
-                    'velocity': (vel.x, vel.y)
-                })
-        self.get_logger().debug(f"Obstáculos dinámicos actualizados: {self.dynamic_obstacles}")
-        
+                obstacle_id = id
+                position = np.array([pos.x, pos.y])
+                velocity = np.array([vel.x, vel.y])
+                z = np.hstack((position, velocity))
+                if obstacle_id not in self.kalman_filters:
+                    # Inicializar filtro de Kalman para nuevo obstáculo
+                    initial_state = z
+                    initial_covariance = np.eye(4)
+                    self.kalman_filters[obstacle_id] = KalmanFilter(initial_state, initial_covariance)
+                    self.get_logger().info(f"Filtro de Kalman inicializado para el obstáculo {obstacle_id}")
+                else:
+                    # Calcular delta_t desde la última actualización
+                    delta_t = current_time - self.obstacle_last_seen[obstacle_id]
+                    # Paso de predicción
+                    self.kalman_filters[obstacle_id].predict(delta_t)
+                    # Paso de actualización
+                    self.kalman_filters[obstacle_id].update(z)
+                # Actualizar el tiempo de último avistamiento
+                self.obstacle_last_seen[obstacle_id] = current_time
+        self.get_logger().debug("Obstáculos actualizados con filtros de Kalman.")
+
+        # Eliminar obstáculos no vistos recientemente
+        self.cleanup_obstacles(current_time)
+
         # Actualizar el OccupancyGrid con las predicciones de obstáculos dinámicos
         if self.map_received:
             self.update_dynamic_obstacles_in_map()
 
+    def cleanup_obstacles(self, current_time):
+        """
+        Elimina obstáculos que no han sido vistos durante un tiempo determinado.
+        """
+        obstacle_timeout = 5.0  # Tiempo en segundos para esperar antes de eliminar un obstáculo
+        to_remove = []
+        for obstacle_id, last_seen in self.obstacle_last_seen.items():
+            if current_time - last_seen > obstacle_timeout:
+                to_remove.append(obstacle_id)
+        for obstacle_id in to_remove:
+            del self.kalman_filters[obstacle_id]
+            del self.obstacle_last_seen[obstacle_id]
+            self.get_logger().info(f"Obstáculo {obstacle_id} eliminado por tiempo de espera.")
+
     def update_dynamic_obstacles_in_map(self):
         """
-        Actualiza el OccupancyGrid con obstáculos dinámicos y puntos filtrados.
+        Actualiza el OccupancyGrid con obstáculos dinámicos utilizando predicciones del filtro de Kalman.
         Incluye expansión de obstáculos y manejo de puntos con tiempo.
         """
         if self.updated_map is None:
@@ -271,33 +370,25 @@ class NavigationNode(Node):
                 else:
                     self.get_logger().debug(f"Punto filtrado fuera del grid: ({x}, {y})")
 
-        # Integrar obstáculos dinámicos en el costmap
+        # Integrar obstáculos dinámicos utilizando los filtros de Kalman
         with self.obstacle_lock:
-            for obstacle in self.dynamic_obstacles:
-                x, y = obstacle['position']
-                vx, vy = obstacle['velocity']
-                grid_x = int((x - self.originX) / self.resolution)
-                grid_y = int((y - self.originY) / self.resolution)
-                # Marcar posición actual del obstáculo
-                if 0 <= grid_x < self.width and 0 <= grid_y < self.height:
-                    dynamic_data[grid_y, grid_x] = 100  # Marcar como obstáculo
-                    self.get_logger().debug(f"Obstáculo dinámico actual agregado al grid: ({grid_x}, {grid_y})")
-                else:
-                    self.get_logger().debug(f"Obstáculo dinámico actual fuera del grid: ({x}, {y})")
-
-                # Predicción de posiciones futuras
+            for obstacle_id, kalman_filter in self.kalman_filters.items():
+                # Predecir posiciones futuras
                 prediction_time_horizon = self.get_parameter('prediction_time_horizon').get_parameter_value().double_value
                 prediction_time_step = self.get_parameter('prediction_time_step').get_parameter_value().double_value
                 dynamic_obstacle_expansion = self.get_parameter('dynamic_obstacle_expansion').get_parameter_value().integer_value
 
                 num_steps = int(prediction_time_horizon / prediction_time_step)
                 for step in range(1, num_steps + 1):
-                    future_x = x + vx * prediction_time_step * step
-                    future_y = y + vy * prediction_time_step * step
+                    delta_t = prediction_time_step * step
+                    # Predecir estado futuro
+                    future_state = kalman_filter.predict_state(delta_t)
+                    future_x = future_state[0]
+                    future_y = future_state[1]
                     future_grid_x = int((future_x - self.originX) / self.resolution)
                     future_grid_y = int((future_y - self.originY) / self.resolution)
                     if 0 <= future_grid_x < self.width and 0 <= future_grid_y < self.height:
-                        # Expansión basada en la velocidad y tamaño del robot
+                        # Expansión basada en el tamaño del robot
                         for dx in range(-dynamic_obstacle_expansion, dynamic_obstacle_expansion + 1):
                             for dy in range(-dynamic_obstacle_expansion, dynamic_obstacle_expansion + 1):
                                 neighbor_x = future_grid_x + dx
@@ -306,13 +397,12 @@ class NavigationNode(Node):
                                     dynamic_data[neighbor_y, neighbor_x] = 100  # Marcar como obstáculo
                                     self.get_logger().debug(f"Obstáculo dinámico futuro agregado al grid: ({neighbor_x}, {neighbor_y})")
                     else:
-                        self.get_logger().debug(f"Obstáculo dinámico futuro fuera del grid: ({future_x}, {future_y})")
+                        self.get_logger().debug(f"Posición predicha del obstáculo fuera del mapa: ({future_x}, {future_y})")
 
         # Expandir los obstáculos para proporcionar una zona de seguridad
-        # Calcula el radio de expansión basado en el tamaño del robot y la resolución
-        robot_radius = 0.15  # Radio del robot en metros (0.3m / 2)
+        robot_radius = 0.28  # Radio del robot en metros (ajusta según el tamaño de tu robot)
         expansion_radius = int(math.ceil(robot_radius / self.resolution))
-        dynamic_data_binary = (dynamic_data == 100).astype(np.int32)
+        dynamic_data_binary = (dynamic_data >= self.occupied_threshold).astype(np.int32)
         expanded_data = binary_dilation(dynamic_data_binary, structure=np.ones((3,3)), iterations=expansion_radius)
         dynamic_data = np.where(expanded_data, 100, dynamic_data)
 
@@ -440,16 +530,16 @@ class NavigationNode(Node):
             return
 
         # Verificar si el inicio o el objetivo están en obstáculos
-        if data_array[start_row][start_column] != 0:
+        if data_array[start_row][start_column] > self.occupied_threshold or data_array[start_row][start_column] == -1:
             self.get_logger().error("La posición de inicio está en un obstáculo.")
             return
 
-        if data_array[goal_row][goal_column] != 0:
+        if data_array[goal_row][goal_column] > self.occupied_threshold or data_array[goal_row][goal_column] == -1:
             self.get_logger().error("La posición del objetivo está en un obstáculo.")
             return
 
         # Encontrar la ruta utilizando A*
-        path = astar(data_array, start, goal)
+        path = astar(data_array, start, goal, self.occupied_threshold)
 
         if not path:
             self.get_logger().error("No se encontró una ruta válida.")
@@ -470,6 +560,7 @@ class NavigationNode(Node):
         # Iniciar el bucle de control
         if self.control_timer:
             self.control_timer.cancel()
+        self.get_logger().info("Iniciando el control de Pure Pursuit.")
         self.control_timer = self.create_timer(0.1, self.pure_pursuit_control)
 
     def publish_planned_path(self):
@@ -494,32 +585,52 @@ class NavigationNode(Node):
 
     def pure_pursuit_control(self):
         """
-        Control de seguimiento de ruta utilizando un controlador PID.
+        Control de seguimiento de ruta utilizando Pure Pursuit con distancia de anticipación variable.
         """
         if not self.path_world or self.robot_pose_x is None or self.robot_pose_y is None:
             return
 
-        # Punto de mira actual es el primer punto en path_world inicialmente
-        if not hasattr(self, 'current_index'):
-            self.current_index = 0
+        # Actualizar la distancia de anticipación si es necesario
+        look_ahead_distance = self.look_ahead_distance
 
-        # Verificar si el robot ha alcanzado el punto de mira actual
-        current_point = self.path_world[self.current_index]
-        dx = current_point[0] - self.robot_pose_x
-        dy = current_point[1] - self.robot_pose_y
-        distance_to_point = math.sqrt(dx**2 + dy**2)
+        # Encontrar el índice del punto más cercano al robot en la ruta
+        closest_distance = float('inf')
+        closest_index = 0
+        for i in range(len(self.path_world)):
+            path_point = self.path_world[i]
+            dx = path_point[0] - self.robot_pose_x
+            dy = path_point[1] - self.robot_pose_y
+            distance_to_point = math.sqrt(dx**2 + dy**2)
+            if distance_to_point < closest_distance:
+                closest_distance = distance_to_point
+                closest_index = i
 
-        # Si la distancia es menor que el umbral, pasar al siguiente punto
-        if distance_to_point < 0.2:  # Umbral de 0.2 metros
-            self.current_index += 1  # Pasar al siguiente punto
+        # Comenzar a buscar el punto de mira desde el índice del punto más cercano
+        target_point = None
+        for i in range(closest_index, len(self.path_world)):
+            path_point = self.path_world[i]
+            dx = path_point[0] - self.robot_pose_x
+            dy = path_point[1] - self.robot_pose_y
+            distance_to_point = math.sqrt(dx**2 + dy**2)
+            if distance_to_point >= look_ahead_distance:
+                target_point = path_point
+                self.current_index = i
+                break
 
-            # Si se llegó al final de la ruta, detener el robot
-            if self.current_index >= len(self.path_world):
-                self.get_logger().info("¡Objetivo alcanzado!")
-                self._stop_robot()
-                return
+        # Si no se encuentra un punto que cumpla la distancia de anticipación, usar el último punto
+        if target_point is None:
+            target_point = self.path_world[-1]
+            self.current_index = len(self.path_world) - 1
 
-            current_point = self.path_world[self.current_index]  # Actualizar al nuevo punto
+        # Verificar si el robot ha alcanzado el objetivo final
+        dx = self.goal_x[-1] - self.robot_pose_x
+        dy = self.goal_y[-1] - self.robot_pose_y
+        distance_to_goal = math.sqrt(dx**2 + dy**2)
+
+        if distance_to_goal < 0.2:  # Umbral para considerar que se alcanzó el objetivo
+            self.get_logger().info("¡Objetivo alcanzado!")
+            self._stop_robot()
+            return
 
         # Verificar si hay obstáculos en el camino actual
         if self.is_path_blocked():
@@ -528,8 +639,8 @@ class NavigationNode(Node):
             return
 
         # Calcular el ángulo de dirección al punto de mira actual
-        dx = current_point[0] - self.robot_pose_x
-        dy = current_point[1] - self.robot_pose_y
+        dx = target_point[0] - self.robot_pose_x
+        dy = target_point[1] - self.robot_pose_y
         angle_to_goal = math.atan2(dy, dx)
 
         # Calcular el error angular
@@ -542,11 +653,19 @@ class NavigationNode(Node):
         self.previous_error = angle_error
 
         # Calcular comandos de control
-        linear_speed = self.max_linear_speed
         angular_speed = (self.kp * angle_error) + (self.ki * self.integral) + (self.kd * derivative)
 
         # Limitar la velocidad angular
         angular_speed = max(-self.max_angular_speed, min(self.max_angular_speed, angular_speed))
+
+        # Modificar la velocidad lineal en función del error angular
+        if abs(angle_error) > self.max_angular_error:
+            linear_speed = 0.0
+        else:
+            linear_speed = self.max_linear_speed * (1 - abs(angle_error) / self.max_angular_error)
+
+        # Asegurarse de que la velocidad lineal no sea negativa
+        linear_speed = max(0.0, linear_speed)
 
         # Publicar el comando de velocidad
         twist = Twist()
@@ -555,22 +674,19 @@ class NavigationNode(Node):
         self.publisher.publish(twist)
         self.get_logger().debug(f"Comando de velocidad publicado: linear.x={linear_speed}, angular.z={angular_speed}")
 
-
     def is_path_blocked(self):
         """
-        Verifica si hay obstáculos en la ruta planificada.
+        Verifica si hay obstáculos en la ruta planificada desde la posición actual hasta el punto de mira.
         """
         # Definir una tolerancia de desviación
-        tolerance = 0.2  # metros
+        N = 10  # Número de puntos por delante para verificar
 
-        for point in self.path_world[self.current_index:]:
+        for point in self.path_world[self.current_index:self.current_index + N]:
             x, y = point
             grid_index = self.world_to_grid_index(x, y)
             if grid_index != -1:
-                grid_row = grid_index // self.width
-                grid_col = grid_index % self.width
                 occupancy = self.updated_map.data[grid_index]
-                if occupancy == 100:
+                if occupancy > self.occupied_threshold or occupancy == -1:
                     self.get_logger().debug(f"Obstáculo detectado en la ruta: ({x}, {y})")
                     return True
             else:
@@ -608,7 +724,7 @@ class NavigationNode(Node):
         """
         marker_array = MarkerArray()
         with self.obstacle_lock:
-            for idx, obstacle in enumerate(self.dynamic_obstacles):
+            for idx, (obstacle_id, kalman_filter) in enumerate(self.kalman_filters.items()):
                 marker = Marker()
                 marker.header.frame_id = "map"
                 marker.header.stamp = self.get_clock().now().to_msg()
@@ -616,8 +732,8 @@ class NavigationNode(Node):
                 marker.id = idx
                 marker.type = Marker.CYLINDER
                 marker.action = Marker.ADD
-                marker.pose.position.x = obstacle['position'][0]
-                marker.pose.position.y = obstacle['position'][1]
+                marker.pose.position.x = kalman_filter.x[0]
+                marker.pose.position.y = kalman_filter.x[1]
                 marker.pose.position.z = 0.1  # Altura del cilindro
                 marker.pose.orientation.x = 0.0
                 marker.pose.orientation.y = 0.0
@@ -650,24 +766,28 @@ class NavigationNode(Node):
             # Convertir el OccupancyGrid a una imagen
             map_array = np.array(self.updated_map.data).reshape((self.height, self.width))
 
-            # Normalizar el mapa para visualizarlo correctamente
-            # -1 (unknown) -> 127 (gray)
-            # 0 (free) -> 255 (white)
-            # 100 (occupied) -> 0 (black)
-            map_image = np.full_like(map_array, 127)  # Inicializar con gris para unknown
-            map_image[map_array == 0] = 255            # Free space as white
-            map_image[map_array == 100] = 0            # Obstacles as black
+            occupied_threshold = self.occupied_threshold  # Usar el parámetro definido
+
+            # Inicializar el mapa de imagen con celdas desconocidas en gris
+            map_image = np.full_like(map_array, 127)  # Celdas desconocidas en gris
+
+            # Marcar celdas libres como blancas y ocupadas como negras
+            map_image[map_array >= 0] = 255  # Inicialmente marcar todas las celdas conocidas como libres
+            map_image[map_array > occupied_threshold] = 0   # Marcar celdas ocupadas como negras
+
+            # Tratar celdas desconocidas como ocupadas (opcional)
+            map_image[map_array == -1] = 0  # Tratar celdas desconocidas como ocupadas
 
             # Mostrar el mapa
             self.ax.clear()
-            self.ax.imshow(map_image, cmap='gray', origin='lower',
-                        extent=[self.originX, self.originX + self.width * self.resolution,
-                                self.originY, self.originY + self.height * self.resolution])
+            self.ax.imshow(map_image, cmap='gray_r', origin='lower',
+                           extent=[self.originX, self.originX + self.width * self.resolution,
+                                   self.originY, self.originY + self.height * self.resolution])
 
             # Dibujar obstáculos dinámicos con transparencia
             with self.obstacle_lock:
-                for obstacle in self.dynamic_obstacles:
-                    ox, oy = obstacle['position']
+                for obstacle_id, kalman_filter in self.kalman_filters.items():
+                    ox, oy = kalman_filter.x[0], kalman_filter.x[1]
                     circle = patches.Circle((ox, oy), 0.2, linewidth=1, edgecolor='r', facecolor='r', alpha=0.5)
                     self.ax.add_patch(circle)
 
