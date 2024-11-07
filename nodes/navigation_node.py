@@ -8,7 +8,7 @@ import numpy as np
 import math
 import heapq
 
-expansion_size = 1
+expansion_size = 10
 
 def euler_from_quaternion(x, y, z, w):
     # Convert quaternion to Euler angles (yaw)
