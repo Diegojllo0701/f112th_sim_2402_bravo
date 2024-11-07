@@ -5,6 +5,31 @@ from geometry_msgs.msg import Pose, TransformStamped
 from nav_msgs.msg import Odometry  # Import Odometry message type
 from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
 from rclpy.duration import Duration
+import math
+import numpy as np
+
+def quaternion_from_euler(ai, aj, ak):
+    ai /= 2.0
+    aj /= 2.0
+    ak /= 2.0
+    ci = math.cos(ai)
+    si = math.sin(ai)
+    cj = math.cos(aj)
+    sj = math.sin(aj)
+    ck = math.cos(ak)
+    sk = math.sin(ak)
+    cc = ci*ck
+    cs = ci*sk
+    sc = si*ck
+    ss = si*sk
+
+    q = np.empty((4, ))
+    q[0] = cj*sc - sj*cs
+    q[1] = cj*ss + sj*cc
+    q[2] = cj*cs - sj*sc
+    q[3] = cj*cc + sj*ss
+
+    return q
 
 class OdomTfPublisher(Node):
     def __init__(self):
@@ -25,7 +50,7 @@ class OdomTfPublisher(Node):
         self.static_tf_broadcaster = StaticTransformBroadcaster(self)
         
         # Publisher for the /odom topic
-        self.odom_publisher = self.create_publisher(Odometry, '/odom', 10)
+        self.odom_publisher = self.create_publisher(Odometry, '/bravo_odom', 10)
         
         # Timer setup for periodic callbacks
         self.sampling_time = 0.1  # Timer interval in seconds
@@ -38,7 +63,8 @@ class OdomTfPublisher(Node):
         
         self.get_logger().info('OdomTfPublisher node has been started.')
 
-    def timer_callback(self):
+    def pose_callback(self,msg):
+        self.latest_pose = msg
         current_time = self.get_clock().now()
         
         # Broadcast the dynamic transform from odom to base_link
@@ -65,7 +91,7 @@ class OdomTfPublisher(Node):
         odom_msg = Odometry()
         odom_msg.header.stamp = current_time.to_msg()
         odom_msg.header.frame_id = self.frame_id
-        odom_msg.child_frame_id = self.child_frame_id
+        odom_msg.child_frame_id = 'laser'
 
         # Set the pose
         odom_msg.pose.pose = self.latest_pose
@@ -104,19 +130,17 @@ class OdomTfPublisher(Node):
         static_t.transform.translation.y = 0.0
         static_t.transform.translation.z = 0.1
         
+        q=quaternion_from_euler(0,0,math.pi)
         # Set the rotation (no rotation, so quaternion is (0,0,0,1))
-        static_t.transform.rotation.x = 0.0
-        static_t.transform.rotation.y = 0.0
-        static_t.transform.rotation.z = 0.0
-        static_t.transform.rotation.w = 1.0
+        static_t.transform.rotation.x = q[0]
+        static_t.transform.rotation.y = q[1]
+        static_t.transform.rotation.z = q[2]
+        static_t.transform.rotation.w = q[3]
         
         # Broadcast the static transform
         self.static_tf_broadcaster.sendTransform(static_t)
         self.get_logger().debug('Published static transform from base_link to laser_frame')
 
-    def pose_callback(self, msg):
-        self.latest_pose = msg
-        self.get_logger().debug('Received new pose message.')
 
 def main(args=None):
     rclpy.init(args=args)
