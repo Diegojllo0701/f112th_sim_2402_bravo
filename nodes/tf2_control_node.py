@@ -1,87 +1,139 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
-from tf2_ros import TransformBroadcaster
-from geometry_msgs.msg import TransformStamped
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Pose, TransformStamped
+from nav_msgs.msg import Odometry  # Import Odometry message type
+from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
+from rclpy.duration import Duration
 import math
+import numpy as np
 
-class TransformNode(Node):
+def quaternion_from_euler(ai, aj, ak):
+    ai /= 2.0
+    aj /= 2.0
+    ak /= 2.0
+    ci = math.cos(ai)
+    si = math.sin(ai)
+    cj = math.cos(aj)
+    sj = math.sin(aj)
+    ck = math.cos(ak)
+    sk = math.sin(ak)
+    cc = ci*ck
+    cs = ci*sk
+    sc = si*ck
+    ss = si*sk
+
+    q = np.empty((4, ))
+    q[0] = cj*sc - sj*cs
+    q[1] = cj*ss + sj*cc
+    q[2] = cj*cs - sj*sc
+    q[3] = cj*cc + sj*ss
+
+    return q
+
+class OdomTfPublisher(Node):
     def __init__(self):
-        super().__init__('transform_node')
-        self.br = TransformBroadcaster(self)
-        self.subscription = self.create_subscription(
-            Twist, '/cmd_vel_joy', self.cmd_callback, 10)
+        super().__init__('odom_tf_publisher')
         
-        # Initialize variables for the moving frame
-        self.current_x = 0.0
-        self.current_y = 0.0
-        self.current_yaw = 0.0
-
-        # Publish the static transform at the start
-        self.publish_static_transform()
-
-    def publish_static_transform(self):
-        t_static = TransformStamped()
-        t_static.header.stamp = self.get_clock().now().to_msg()
-        t_static.header.frame_id = 'world'
-        t_static.child_frame_id = 'static_frame'
+        # Create a TransformBroadcaster for dynamic transforms
+        self.tf_broadcaster = TransformBroadcaster(self)
         
-        # Set static transform parameters
-        t_static.transform.translation.x = 0.0
-        t_static.transform.translation.y = 0.0
-        t_static.transform.translation.z = 0.0
-        t_static.transform.rotation.x = 0.0
-        t_static.transform.rotation.y = 0.0
-        t_static.transform.rotation.z = 0.0
-        t_static.transform.rotation.w = 1.0  # Neutral quaternion
+        # Create a StaticTransformBroadcaster for laser_frame
+        self.static_tf_broadcaster = StaticTransformBroadcaster(self)
         
-        self.br.sendTransform(t_static)
+        # Timer setup for periodic callbacks
+        self.sampling_time = 0.1  # Timer interval in seconds
+        self.create_timer(self.sampling_time, self.pose_callback)
+        # Initialize variables to store the latest pose
+        self.latest_pose = Pose()
+        self.frame_id = 'camera_link'             # Parent frame ID for Odometry
+        self.child_frame_id = 'base_footprint'  # Child frame ID for Odometry
+        self.get_logger().info('OdomTfPublisher node has been started.')
 
-    def cmd_callback(self, msg):
-        # Update current_yaw (angular.z)
-        self.current_yaw += msg.angular.z
+    def pose_callback(self):
+        current_time = self.get_clock().now()
+        
+        # Broadcast the dynamic transform from odom to base_link
+        t = TransformStamped()
 
-        # Calculate the movement in the local x-direction of the moving frame
-        delta_x = msg.linear.x * math.cos(self.current_yaw)
-        delta_y = msg.linear.x * math.sin(self.current_yaw)
+        # Populate TransformStamped message
+        t.header.stamp = current_time.to_msg()
+        t.header.frame_id = self.frame_id
+        t.child_frame_id = self.child_frame_id
 
-        self.current_x += delta_x
-        self.current_y += delta_y
+        # Set the translation based on the origin offset
+        t.transform.translation.x = -0.10
+        t.transform.translation.y = 0.0
+        t.transform.translation.z = 0.05
+        
+        q0=quaternion_from_euler(0,0,0)
+        # Set the rotation (no rotation, so quaternion is (0,0,0,1))
+        t.transform.rotation.x = q0[0]
+        t.transform.rotation.y = q0[1]
+        t.transform.rotation.z = q0[2]
+        t.transform.rotation.w = q0[3]
 
-        # Publish the updated moving transform
-        self.publish_moving_transform()
+        # Broadcast the transform
+        self.tf_broadcaster.sendTransform(t)
+        self.get_logger().debug(f'Broadcasted transform from {t.header.frame_id} to {t.child_frame_id}')
 
-    def publish_moving_transform(self):
-        t_moving = TransformStamped()
-        t_moving.header.stamp = self.get_clock().now().to_msg()
-        t_moving.header.frame_id = 'static_frame'
-        t_moving.child_frame_id = 'moving_frame'
+        # Broadcast the static transform from base_link to laser_frame
+        static_t = TransformStamped()
+        
+        # Populate StaticTransformStamped message
+        static_t.header.stamp = current_time.to_msg()
+        static_t.header.frame_id = 'camera_link'
+        static_t.child_frame_id = 'laser'
+        
+        # Set the translation based on the origin offset
+        static_t.transform.translation.x = -0.14
+        static_t.transform.translation.y = 0.0
+        static_t.transform.translation.z = 0.1
+        
+        q=quaternion_from_euler(0,0,math.pi)
+        # Set the rotation (no rotation, so quaternion is (0,0,0,1))
+        static_t.transform.rotation.x = q[0]
+        static_t.transform.rotation.y = q[1]
+        static_t.transform.rotation.z = q[2]
+        static_t.transform.rotation.w = q[3]
+        
+        # Broadcast the static transform
+        self.static_tf_broadcaster.sendTransform(static_t)
+        self.get_logger().debug('Published static transform from base_link to laser_frame')
 
-        # Set the dynamic transform
-        t_moving.transform.translation.x = self.current_x
-        t_moving.transform.translation.y = self.current_y
-        t_moving.transform.translation.z = 0.0
+        t1 = TransformStamped()
 
-        # Convert yaw to quaternion
-        qz = math.sin(self.current_yaw / 2.0)
-        qw = math.cos(self.current_yaw / 2.0)
-        t_moving.transform.rotation.x = 0.0
-        t_moving.transform.rotation.y = 0.0
-        t_moving.transform.rotation.z = qz
-        t_moving.transform.rotation.w = qw
+        # Populate TransformStamped message
+        t1.header.stamp = current_time.to_msg()
+        t1.header.frame_id = 'laser'
+        t1.child_frame_id = 'laser_frame'
 
-        # Broadcast the moving transform
-        self.br.sendTransform(t_moving)
+        # Set the translation based on the origin offset
+        t1.transform.translation.x = -0.0
+        t1.transform.translation.y = 0.0
+        t1.transform.translation.z = 0.0
+        
+        q0=quaternion_from_euler(0,0,0)
+        # Set the rotation (no rotation, so quaternion is (0,0,0,1))
+        t1.transform.rotation.x = q0[0]
+        t1.transform.rotation.y = q0[1]
+        t1.transform.rotation.z = q0[2]
+        t1.transform.rotation.w = q0[3]
+
+        # Broadcast the transform
+        self.tf_broadcaster.sendTransform(t1)
+
 
 def main(args=None):
     rclpy.init(args=args)
-    node = TransformNode()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    node = OdomTfPublisher()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
-
-

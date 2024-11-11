@@ -168,8 +168,8 @@ class NavigationNode(Node):
         # Parámetros de predicción
         self.declare_parameter('prediction_time_horizon', 0.2)  # Tiempo en segundos para predecir posiciones futuras
         self.declare_parameter('prediction_time_step', 0.5)    # Intervalo de tiempo entre predicciones
-        self.declare_parameter('dynamic_obstacle_expansion', 1)  # Tamaño de expansión basado en velocidad y robot
-        self.declare_parameter('raw_point_ttl', 7.0)  # Tiempo en segundos para que los puntos crudos expiren
+        self.declare_parameter('dynamic_obstacle_expansion', 0.15)  # Tamaño de expansión basado en velocidad y robot
+        self.declare_parameter('raw_point_ttl', 1.0)  # Tiempo en segundos para que los puntos crudos expiren
 
         # Parámetro para habilitar/deshabilitar la visualización
         self.declare_parameter('enable_visualization', True)
@@ -400,7 +400,7 @@ class NavigationNode(Node):
                         self.get_logger().debug(f"Posición predicha del obstáculo fuera del mapa: ({future_x}, {future_y})")
 
         # Expandir los obstáculos para proporcionar una zona de seguridad
-        robot_radius = 0.28  # Radio del robot en metros (ajusta según el tamaño de tu robot)
+        robot_radius = 0.1  # Radio del robot en metros (ajusta según el tamaño de tu robot)
         expansion_radius = int(math.ceil(robot_radius / self.resolution))
         dynamic_data_binary = (dynamic_data >= self.occupied_threshold).astype(np.int32)
         expanded_data = binary_dilation(dynamic_data_binary, structure=np.ones((3,3)), iterations=expansion_radius)
@@ -840,3 +840,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+    

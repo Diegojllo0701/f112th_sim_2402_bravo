@@ -134,7 +134,7 @@ public:
 
         // Subscriber to point cloud data
         point_cloud_subscriber_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-            "/camera/points",  // Ajusta este tópico según tu configuración
+            "/camera/camera/depth/color/points",  // Ajusta este tópico según tu configuración
             10,
             std::bind(&PointCloudClusteringNode::pointCloudCallback, this, std::placeholders::_1));
 
@@ -179,7 +179,7 @@ private:
         pcl::PassThrough<pcl::PointXYZ> pass;
         pass.setInputCloud(transformed_cloud);
         pass.setFilterFieldName("z");
-        pass.setFilterLimits(0.28, 2.0);  // Eliminar puntos por debajo de 0.25m y por encima de 1.5m
+        pass.setFilterLimits(0.1, 2.0);  // Eliminar puntos por debajo de 0.25m y por encima de 1.5m
         pass.filter(*filtered_cloud);
 
         if (filtered_cloud->empty())
@@ -239,7 +239,7 @@ private:
         geometry_msgs::msg::TransformStamped transform_stamped;
         try
         {
-            transform_stamped = tf_buffer_.lookupTransform("odom", "camera_link_optical", stamp, tf2::durationFromSec(0.1));
+            transform_stamped = tf_buffer_.lookupTransform("odom", "camera_depth_optical_frame", stamp, tf2::durationFromSec(0.1));
         }
         catch (tf2::TransformException &ex)
         {
@@ -312,7 +312,7 @@ private:
         // Configurar la extracción de clusters Euclidianos
         pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
         ec.setClusterTolerance(0.20);  // Tolerancia en metros (ajusta según sea necesario)
-        ec.setMinClusterSize(10);      // Número mínimo de puntos para formar un cluster
+        ec.setMinClusterSize(30);      // Número mínimo de puntos para formar un cluster
         ec.setMaxClusterSize(1000);    // Número máximo de puntos en un cluster
         ec.setSearchMethod(kd_tree);
         ec.setInputCloud(cloud);
