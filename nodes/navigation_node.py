@@ -162,9 +162,9 @@ class NavigationNode(Node):
         self.robot_yaw = None
 
         # Parámetros de control
-        self.max_linear_speed = 0.2      # Ajustar según sea necesario
+        self.max_linear_speed = 0.6     # Ajustar según sea necesario
         self.max_angular_speed = 1.5     # Ajustar según sea necesario
-
+        self.integral =0.0
         # Parámetros de predicción
         self.declare_parameter('prediction_time_horizon', 0.2)  # Tiempo en segundos para predecir posiciones futuras
         self.declare_parameter('prediction_time_step', 0.5)    # Intervalo de tiempo entre predicciones
@@ -216,7 +216,7 @@ class NavigationNode(Node):
         # Bandera para verificar si el mapa ha sido recibido
         self.map_received = False
 
-        self.declare_parameter('kp', 1.5)  # Ganancia Proporcional
+        self.declare_parameter('kp', 2.0)  # Ganancia Proporcional
         self.declare_parameter('ki', 0.0)  # Ganancia Integral
         self.declare_parameter('kd', 0.05)  # Ganancia Derivativa
 
@@ -224,9 +224,15 @@ class NavigationNode(Node):
         self.ki = self.get_parameter('ki').get_parameter_value().double_value
         self.kd = self.get_parameter('kd').get_parameter_value().double_value
 
-        # Inicializar términos del PID
-        self.integral = 0.0
-        self.previous_error = 0.0
+        # Solicitar al usuario el número de puntos para la navegación
+        self.num_points = int(input("Ingrese el número de puntos para la navegación: "))
+        self.get_logger().info(f"Número de puntos a recibir: {self.num_points}")
+
+        # Contador de puntos recibidos
+        self.points_received = 0
+
+        # Indicar al usuario que envíe los puntos desde RViz2
+        self.get_logger().info("Por favor, envíe los puntos de destino utilizando el tópico /goal_pose desde RViz2.")
 
     def initialize_visualization(self):
         """
@@ -288,13 +294,19 @@ class NavigationNode(Node):
 
     def Goal_Pose_callback(self, msg):
         """
-        Callback para manejar la recepción de objetivos de navegación.
+        Callback para manejar la recepción de objetivos de navegación desde /goal_pose.
         """
-        # Añadir objetivos a las listas
-        self.goal_x.append(msg.pose.position.x)
-        self.goal_y.append(msg.pose.position.y)
-        self.get_logger().info(f"Nuevo objetivo añadido: ({msg.pose.position.x}, {msg.pose.position.y})")
-        self.get_map()
+        if self.points_received < self.num_points:
+            # Añadir objetivos a las listas
+            self.goal_x.append(msg.pose.position.x)
+            self.goal_y.append(msg.pose.position.y)
+            self.points_received += 1
+            self.get_logger().info(f"Punto {self.points_received} recibido: ({msg.pose.position.x}, {msg.pose.position.y})")
+            if self.points_received == self.num_points:
+                self.get_logger().info("Se han recibido todos los puntos. Iniciando planificación de ruta.")
+                self.get_map()
+        else:
+            self.get_logger().warn("Se han recibido más puntos de los especificados. Ignorando punto adicional.")
 
     def obstacles_callback(self, msg):
         """
@@ -400,7 +412,7 @@ class NavigationNode(Node):
                         self.get_logger().debug(f"Posición predicha del obstáculo fuera del mapa: ({future_x}, {future_y})")
 
         # Expandir los obstáculos para proporcionar una zona de seguridad
-        robot_radius = 0.1  # Radio del robot en metros (ajusta según el tamaño de tu robot)
+        robot_radius = 0.28  # Radio del robot en metros (ajusta según el tamaño de tu robot)
         expansion_radius = int(math.ceil(robot_radius / self.resolution))
         dynamic_data_binary = (dynamic_data >= self.occupied_threshold).astype(np.int32)
         expanded_data = binary_dilation(dynamic_data_binary, structure=np.ones((3,3)), iterations=expansion_radius)
@@ -490,7 +502,7 @@ class NavigationNode(Node):
 
     def get_map(self):
         """
-        Planifica la ruta basada en el OccupancyGrid actualizado utilizando A*.
+        Planifica la ruta basada en el OccupancyGrid actualizado utilizando A* entre cada par de puntos.
         """
         # Esperar hasta que se haya recibido la posición del robot
         if self.robot_pose_x is None or self.robot_pose_y is None:
@@ -511,52 +523,73 @@ class NavigationNode(Node):
             self.get_logger().error(f"OccupancyGrid tiene tamaño incorrecto: esperado {expected_size}, recibido {actual_size}.")
             return
 
-        # Convertir posiciones de inicio y fin a índices de la cuadrícula
-        goal_column = int((self.goal_x[-1] - self.originX) / self.resolution)
-        goal_row = int((self.goal_y[-1] - self.originY) / self.resolution)
-        start_column = int((self.robot_pose_x - self.originX) / self.resolution)
-        start_row = int((self.robot_pose_y - self.originY) / self.resolution)
-
-        start = (start_row, start_column)
-        goal = (goal_row, goal_column)
-
-        # Verificar si el inicio y el objetivo están dentro de los límites
-        if not (0 <= start_row < self.height and 0 <= start_column < self.width):
-            self.get_logger().error("La posición de inicio está fuera de los límites.")
-            return
-
-        if not (0 <= goal_row < self.height and 0 <= goal_column < self.width):
-            self.get_logger().error("La posición del objetivo está fuera de los límites.")
-            return
-
-        # Verificar si el inicio o el objetivo están en obstáculos
-        if data_array[start_row][start_column] > self.occupied_threshold or data_array[start_row][start_column] == -1:
-            self.get_logger().error("La posición de inicio está en un obstáculo.")
-            return
-
-        if data_array[goal_row][goal_column] > self.occupied_threshold or data_array[goal_row][goal_column] == -1:
-            self.get_logger().error("La posición del objetivo está en un obstáculo.")
-            return
-
-        # Encontrar la ruta utilizando A*
-        path = astar(data_array, start, goal, self.occupied_threshold)
-
-        if not path:
-            self.get_logger().error("No se encontró una ruta válida.")
-            return
-
-        # Convertir la ruta de índices de cuadrícula a coordenadas del mundo
+        # Inicializar la ruta total
         self.path_world = []
-        for row, col in path:
-            x = col * self.resolution + self.originX + self.resolution / 2.0
-            y = row * self.resolution + self.originY + self.resolution / 2.0
-            self.path_world.append((x, y))
 
-        self.get_logger().info(f"Ruta planificada con {len(self.path_world)} puntos.")
+        # Posición inicial del robot
+        current_x = self.robot_pose_x
+        current_y = self.robot_pose_y
+
+        # Planificar ruta entre cada par de puntos
+        for idx in range(len(self.goal_x)):
+            # Convertir posiciones de inicio y fin a índices de la cuadrícula
+            start_column = int((current_x - self.originX) / self.resolution)
+            start_row = int((current_y - self.originY) / self.resolution)
+            goal_column = int((self.goal_x[idx] - self.originX) / self.resolution)
+            goal_row = int((self.goal_y[idx] - self.originY) / self.resolution)
+
+            start = (start_row, start_column)
+            goal = (goal_row, goal_column)
+
+            # Verificar si el inicio y el objetivo están dentro de los límites
+            if not (0 <= start_row < self.height and 0 <= start_column < self.width):
+                self.get_logger().error(f"La posición de inicio está fuera de los límites para el segmento {idx+1}.")
+                return
+
+            if not (0 <= goal_row < self.height and 0 <= goal_column < self.width):
+                self.get_logger().error(f"La posición del objetivo está fuera de los límites para el punto {idx+1}.")
+                return
+
+            # Verificar si el inicio o el objetivo están en obstáculos
+            if data_array[start_row][start_column] > self.occupied_threshold or data_array[start_row][start_column] == -1:
+                self.get_logger().error(f"La posición de inicio está en un obstáculo para el segmento {idx+1}.")
+                return
+
+            if data_array[goal_row][goal_column] > self.occupied_threshold or data_array[goal_row][goal_column] == -1:
+                self.get_logger().error(f"La posición del objetivo está en un obstáculo para el punto {idx+1}.")
+                return
+
+            # Encontrar la ruta utilizando A*
+            path = astar(data_array, start, goal, self.occupied_threshold)
+
+            if not path:
+                self.get_logger().error(f"No se encontró una ruta válida para el segmento {idx+1}.")
+                return
+
+            # Convertir la ruta de índices de cuadrícula a coordenadas del mundo
+            segment_path_world = []
+            for row, col in path:
+                x = col * self.resolution + self.originX + self.resolution / 2.0
+                y = row * self.resolution + self.originY + self.resolution / 2.0
+                segment_path_world.append((x, y))
+
+            self.get_logger().info(f"Ruta planificada para el segmento {idx+1} con {len(segment_path_world)} puntos.")
+
+            # Evitar duplicar el punto inicial en segmentos consecutivos
+            if idx > 0 and segment_path_world:
+                segment_path_world = segment_path_world[1:]
+
+            # Añadir el segmento a la ruta total
+            self.path_world.extend(segment_path_world)
+
+            # Actualizar la posición actual para el próximo segmento
+            current_x = self.goal_x[idx]
+            current_y = self.goal_y[idx]
+
+        self.get_logger().info(f"Ruta total planificada con {len(self.path_world)} puntos.")
 
         # Publicar la ruta planificada para RViz
         self.publish_planned_path()
-
         # Iniciar el bucle de control
         if self.control_timer:
             self.control_timer.cancel()
@@ -585,87 +618,61 @@ class NavigationNode(Node):
 
     def pure_pursuit_control(self):
         """
-        Control de seguimiento de ruta utilizando Pure Pursuit con distancia de anticipación variable.
+        Control de seguimiento de ruta utilizando un controlador PID.
         """
+        self.get_logger().info("Ejecutando el control de Pure Pursuit.")
         if not self.path_world or self.robot_pose_x is None or self.robot_pose_y is None:
+            self.get_logger().warn("Ruta o posición del robot no disponible. Deteniendo el robot.")
             return
 
-        # Actualizar la distancia de anticipación si es necesario
-        look_ahead_distance = self.look_ahead_distance
+        # Punto de mira actual es el primer punto en path_world inicialmente
+        if not hasattr(self, 'current_index'):
+            self.current_index = 0
 
-        # Encontrar el índice del punto más cercano al robot en la ruta
-        closest_distance = float('inf')
-        closest_index = 0
-        for i in range(len(self.path_world)):
-            path_point = self.path_world[i]
-            dx = path_point[0] - self.robot_pose_x
-            dy = path_point[1] - self.robot_pose_y
-            distance_to_point = math.sqrt(dx**2 + dy**2)
-            if distance_to_point < closest_distance:
-                closest_distance = distance_to_point
-                closest_index = i
+        # Verificar si el robot ha alcanzado el punto de mira actual
+        current_point = self.path_world[self.current_index]
+        dx = current_point[0] - self.robot_pose_x
+        dy = current_point[1] - self.robot_pose_y
+        distance_to_point = math.sqrt(dx**2 + dy**2)
+        self.get_logger().info(f"Distancia al punto de mira actual: {distance_to_point}")
+        # Si la distancia es menor que el umbral, pasar al siguiente punto
+        if distance_to_point < 0.3:  # Umbral de 0.2 metros
+            self.current_index += 5  # Pasar al siguiente punto
 
-        # Comenzar a buscar el punto de mira desde el índice del punto más cercano
-        target_point = None
-        for i in range(closest_index, len(self.path_world)):
-            path_point = self.path_world[i]
-            dx = path_point[0] - self.robot_pose_x
-            dy = path_point[1] - self.robot_pose_y
-            distance_to_point = math.sqrt(dx**2 + dy**2)
-            if distance_to_point >= look_ahead_distance:
-                target_point = path_point
-                self.current_index = i
-                break
+            # Si se llegó al final de la ruta, detener el robot
+            if self.current_index >= len(self.path_world):
+                self.get_logger().info("¡Objetivo alcanzado!")
+                self._stop_robot()
+                return
 
-        # Si no se encuentra un punto que cumpla la distancia de anticipación, usar el último punto
-        if target_point is None:
-            target_point = self.path_world[-1]
-            self.current_index = len(self.path_world) - 1
-
-        # Verificar si el robot ha alcanzado el objetivo final
-        dx = self.goal_x[-1] - self.robot_pose_x
-        dy = self.goal_y[-1] - self.robot_pose_y
-        distance_to_goal = math.sqrt(dx**2 + dy**2)
-
-        if distance_to_goal < 0.2:  # Umbral para considerar que se alcanzó el objetivo
-            self.get_logger().info("¡Objetivo alcanzado!")
-            self._stop_robot()
-            return
-
+            current_point = self.path_world[self.current_index]  # Actualizar al nuevo punto
+        self.get_logger().info(f"Punto de mira actual: ({current_point[0]}, {current_point[1]})")
         # Verificar si hay obstáculos en el camino actual
-        if self.is_path_blocked():
-            self.get_logger().warn("Obstáculo detectado en la ruta planificada. Re-planificando...")
-            self.get_map()  # Re-planificar la ruta
-            return
+        # if self.is_path_blocked():
+        #     self.get_logger().warn("Obstáculo detectado en la ruta planificada. Re-planificando...")
+        #     self.get_map()  # Re-planificar la ruta
+        #     return
 
         # Calcular el ángulo de dirección al punto de mira actual
-        dx = target_point[0] - self.robot_pose_x
-        dy = target_point[1] - self.robot_pose_y
+        dx = current_point[0] - self.robot_pose_x
+        dy = current_point[1] - self.robot_pose_y
         angle_to_goal = math.atan2(dy, dx)
-
+        self.get_logger().info(f"Ángulo al punto de mira: {angle_to_goal}")
         # Calcular el error angular
         angle_error = angle_to_goal - self.robot_yaw
         angle_error = math.atan2(math.sin(angle_error), math.cos(angle_error))  # Normalizar
-
+        self.get_logger().info(f"Error angular: {angle_error}")
         # Actualización del PID
-        self.integral += angle_error * 0.1  # Asumiendo un tiempo de muestreo de 0.1s
-        derivative = (angle_error - self.previous_error) / 0.1
-        self.previous_error = angle_error
-
+        #self.integral += angle_error * 0.1  # Asumiendo un tiempo de muestreo de 0.1s
+        #derivative = (angle_error - self.previous_error) / 0.1
+        #self.previous_error = angle_error
+        #self.get_logger().info(f"Error integral: {self.integral}, derivativo: {derivative}")
         # Calcular comandos de control
-        angular_speed = (self.kp * angle_error) + (self.ki * self.integral) + (self.kd * derivative)
-
+        linear_speed = self.max_linear_speed
+        angular_speed = (self.kp * angle_error) #+ (self.ki * self.integral) + (self.kd * derivative)
+        self.get_logger().info(f"Velocidad angular: {angular_speed}")
         # Limitar la velocidad angular
         angular_speed = max(-self.max_angular_speed, min(self.max_angular_speed, angular_speed))
-
-        # Modificar la velocidad lineal en función del error angular
-        if abs(angle_error) > self.max_angular_error:
-            linear_speed = 0.0
-        else:
-            linear_speed = self.max_linear_speed * (1 - abs(angle_error) / self.max_angular_error)
-
-        # Asegurarse de que la velocidad lineal no sea negativa
-        linear_speed = max(0.0, linear_speed)
 
         # Publicar el comando de velocidad
         twist = Twist()
@@ -840,4 +847,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-    
