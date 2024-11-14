@@ -34,7 +34,12 @@ def quaternion_from_euler(ai, aj, ak):
 class OdomTfPublisher(Node):
     def __init__(self):
         super().__init__('odom_tf_publisher')
-        
+        self.subscription = self.create_subscription(
+            Pose,
+            '/robot1/pose',
+            self.pose_callback,
+            10)
+        self.subscription 
         # Create a TransformBroadcaster for dynamic transforms
         self.tf_broadcaster = TransformBroadcaster(self)
         
@@ -43,14 +48,13 @@ class OdomTfPublisher(Node):
         
         # Timer setup for periodic callbacks
         self.sampling_time = 0.1  # Timer interval in seconds
-        self.create_timer(self.sampling_time, self.pose_callback)
         # Initialize variables to store the latest pose
         self.latest_pose = Pose()
-        self.frame_id = 'camera_link'             # Parent frame ID for Odometry
+        self.frame_id = 'odom'             # Parent frame ID for Odometry
         self.child_frame_id = 'base_footprint'  # Child frame ID for Odometry
         self.get_logger().info('OdomTfPublisher node has been started.')
 
-    def pose_callback(self):
+    def pose_callback(self,msg):
         current_time = self.get_clock().now()
         
         # Broadcast the dynamic transform from odom to base_link
@@ -61,17 +65,17 @@ class OdomTfPublisher(Node):
         t.header.frame_id = self.frame_id
         t.child_frame_id = self.child_frame_id
 
-        # Set the translation based on the origin offset
-        t.transform.translation.x = -0.10
-        t.transform.translation.y = 0.0
-        t.transform.translation.z = 0.05
+        # Set the translation based on the received pose
+        t.transform.translation.x = msg.position.x
+        t.transform.translation.y = msg.position.y
+        t.transform.translation.z = msg.position.z
+
+        # Set the rotation based on the received orientation
+        t.transform.rotation = msg.orientation
         
         q0=quaternion_from_euler(0,0,0)
         # Set the rotation (no rotation, so quaternion is (0,0,0,1))
-        t.transform.rotation.x = q0[0]
-        t.transform.rotation.y = q0[1]
-        t.transform.rotation.z = q0[2]
-        t.transform.rotation.w = q0[3]
+        t.transform.rotation = msg.orientation
 
         # Broadcast the transform
         self.tf_broadcaster.sendTransform(t)
@@ -82,11 +86,11 @@ class OdomTfPublisher(Node):
         
         # Populate StaticTransformStamped message
         static_t.header.stamp = current_time.to_msg()
-        static_t.header.frame_id = 'camera_link'
+        static_t.header.frame_id = 'base_footprint'
         static_t.child_frame_id = 'laser'
         
         # Set the translation based on the origin offset
-        static_t.transform.translation.x = -0.14
+        static_t.transform.translation.x = -0.04
         static_t.transform.translation.y = 0.0
         static_t.transform.translation.z = 0.1
         
