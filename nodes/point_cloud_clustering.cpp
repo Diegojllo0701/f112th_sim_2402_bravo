@@ -134,7 +134,7 @@ public:
 
         // Subscriber to point cloud data
         point_cloud_subscriber_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-            "/camera/camera/depth/color/points",  // Ajusta este tópico según tu configuración
+            "/camera/points",  // Ajusta este tópico según tu configuración
             10,
             std::bind(&PointCloudClusteringNode::pointCloudCallback, this, std::placeholders::_1));
 
@@ -239,7 +239,7 @@ private:
         geometry_msgs::msg::TransformStamped transform_stamped;
         try
         {
-            transform_stamped = tf_buffer_.lookupTransform("odom", "camera_depth_optical_frame", stamp, tf2::durationFromSec(0.1));
+            transform_stamped = tf_buffer_.lookupTransform("odom", "camera_link_optical", stamp, tf2::durationFromSec(0.1));
         }
         catch (tf2::TransformException &ex)
         {

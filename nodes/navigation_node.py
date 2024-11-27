@@ -3,7 +3,7 @@ import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import OccupancyGrid, Odometry, Path
 from geometry_msgs.msg import PoseStamped, Twist
-from custom_msgs.msg import Obstacles  # Asegúrate de que este mensaje personalizado esté definido correctamente
+from custom_msgs.msg import Obstacles
 from sensor_msgs.msg import PointCloud2
 import sensor_msgs_py.point_cloud2 as pc2
 import numpy as np
@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from visualization_msgs.msg import Marker, MarkerArray  # Para RViz
 from scipy.ndimage import binary_dilation  # Para la expansión de obstáculos
+from geometry_msgs.msg import Pose
 import time
 
 def euler_from_quaternion(x, y, z, w):
@@ -142,7 +143,7 @@ class NavigationNode(Node):
         self.subscription_goal = self.create_subscription(
             PoseStamped, '/goal_pose', self.Goal_Pose_callback, QoSProfile(depth=10))
         self.subscription_odom = self.create_subscription(
-            Odometry, '/odom', self.odom_callback, 10)
+            Pose, '/robot1/pose', self.odom_callback, 10)
         self.subscription_obstacles = self.create_subscription(
             Obstacles, '/detected_obstacles', self.obstacles_callback, 10)
         
@@ -162,8 +163,8 @@ class NavigationNode(Node):
         self.robot_yaw = None
 
         # Parámetros de control
-        self.max_linear_speed = 0.6     # Ajustar según sea necesario
-        self.max_angular_speed = 1.5     # Ajustar según sea necesario
+        self.max_linear_speed = 1.0    # Ajustar según sea necesario
+        self.max_angular_speed = 2.0     # Ajustar según sea necesario
         self.integral =0.0
         # Parámetros de predicción
         self.declare_parameter('prediction_time_horizon', 0.2)  # Tiempo en segundos para predecir posiciones futuras
@@ -216,7 +217,7 @@ class NavigationNode(Node):
         # Bandera para verificar si el mapa ha sido recibido
         self.map_received = False
 
-        self.declare_parameter('kp', 2.0)  # Ganancia Proporcional
+        self.declare_parameter('kp', 0.5)  # Ganancia Proporcional
         self.declare_parameter('ki', 0.0)  # Ganancia Integral
         self.declare_parameter('kd', 0.05)  # Ganancia Derivativa
 
@@ -284,9 +285,9 @@ class NavigationNode(Node):
         """
         Callback para manejar la recepción de la odometría.
         """
-        self.robot_pose_x = msg.pose.pose.position.x
-        self.robot_pose_y = msg.pose.pose.position.y
-        orientation_q = msg.pose.pose.orientation
+        self.robot_pose_x = msg.position.x
+        self.robot_pose_y = msg.position.y
+        orientation_q = msg.orientation
         self.robot_yaw = euler_from_quaternion(
             orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w)
         
@@ -412,7 +413,7 @@ class NavigationNode(Node):
                         self.get_logger().debug(f"Posición predicha del obstáculo fuera del mapa: ({future_x}, {future_y})")
 
         # Expandir los obstáculos para proporcionar una zona de seguridad
-        robot_radius = 0.28  # Radio del robot en metros (ajusta según el tamaño de tu robot)
+        robot_radius = 0.13  # Radio del robot en metros (ajusta según el tamaño de tu robot)
         expansion_radius = int(math.ceil(robot_radius / self.resolution))
         dynamic_data_binary = (dynamic_data >= self.occupied_threshold).astype(np.int32)
         expanded_data = binary_dilation(dynamic_data_binary, structure=np.ones((3,3)), iterations=expansion_radius)
@@ -550,14 +551,14 @@ class NavigationNode(Node):
                 self.get_logger().error(f"La posición del objetivo está fuera de los límites para el punto {idx+1}.")
                 return
 
-            # Verificar si el inicio o el objetivo están en obstáculos
-            if data_array[start_row][start_column] > self.occupied_threshold or data_array[start_row][start_column] == -1:
-                self.get_logger().error(f"La posición de inicio está en un obstáculo para el segmento {idx+1}.")
-                return
+            # # Verificar si el inicio o el objetivo están en obstáculos
+            # if data_array[start_row][start_column] > self.occupied_threshold or data_array[start_row][start_column] == -1:
+            #     self.get_logger().error(f"La posición de inicio está en un obstáculo para el segmento {idx+1}.")
+            #     return
 
-            if data_array[goal_row][goal_column] > self.occupied_threshold or data_array[goal_row][goal_column] == -1:
-                self.get_logger().error(f"La posición del objetivo está en un obstáculo para el punto {idx+1}.")
-                return
+            # if data_array[goal_row][goal_column] > self.occupied_threshold or data_array[goal_row][goal_column] == -1:
+            #     self.get_logger().error(f"La posición del objetivo está en un obstáculo para el punto {idx+1}.")
+            #     return
 
             # Encontrar la ruta utilizando A*
             path = astar(data_array, start, goal, self.occupied_threshold)
@@ -631,13 +632,13 @@ class NavigationNode(Node):
 
         # Verificar si el robot ha alcanzado el punto de mira actual
         current_point = self.path_world[self.current_index]
-        dx = current_point[0] - self.robot_pose_x
+        dx = current_point[0]-0.1 - self.robot_pose_x
         dy = current_point[1] - self.robot_pose_y
         distance_to_point = math.sqrt(dx**2 + dy**2)
         self.get_logger().info(f"Distancia al punto de mira actual: {distance_to_point}")
         # Si la distancia es menor que el umbral, pasar al siguiente punto
         if distance_to_point < 0.3:  # Umbral de 0.2 metros
-            self.current_index += 5  # Pasar al siguiente punto
+            self.current_index += 9 # Pasar al siguiente punto
 
             # Si se llegó al final de la ruta, detener el robot
             if self.current_index >= len(self.path_world):
@@ -647,7 +648,7 @@ class NavigationNode(Node):
 
             current_point = self.path_world[self.current_index]  # Actualizar al nuevo punto
         self.get_logger().info(f"Punto de mira actual: ({current_point[0]}, {current_point[1]})")
-        # Verificar si hay obstáculos en el camino actual
+        #Verificar si hay obstáculos en el camino actual
         # if self.is_path_blocked():
         #     self.get_logger().warn("Obstáculo detectado en la ruta planificada. Re-planificando...")
         #     self.get_map()  # Re-planificar la ruta
@@ -668,7 +669,10 @@ class NavigationNode(Node):
         #self.previous_error = angle_error
         #self.get_logger().info(f"Error integral: {self.integral}, derivativo: {derivative}")
         # Calcular comandos de control
-        linear_speed = self.max_linear_speed
+        max_angle_error = math.pi / 2  # Ángulo máximo considerado (90 grados)
+        angle_error_normalized = abs(angle_error) / max_angle_error
+        linear_speed = self.max_linear_speed * (1 - angle_error_normalized)
+        linear_speed = 0.33
         angular_speed = (self.kp * angle_error) #+ (self.ki * self.integral) + (self.kd * derivative)
         self.get_logger().info(f"Velocidad angular: {angular_speed}")
         # Limitar la velocidad angular
@@ -686,7 +690,7 @@ class NavigationNode(Node):
         Verifica si hay obstáculos en la ruta planificada desde la posición actual hasta el punto de mira.
         """
         # Definir una tolerancia de desviación
-        N = 10  # Número de puntos por delante para verificar
+        N = 30  # Número de puntos por delante para verificar
 
         for point in self.path_world[self.current_index:self.current_index + N]:
             x, y = point
