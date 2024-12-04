@@ -649,10 +649,10 @@ class NavigationNode(Node):
             current_point = self.path_world[self.current_index]  # Actualizar al nuevo punto
         self.get_logger().info(f"Punto de mira actual: ({current_point[0]}, {current_point[1]})")
         #Verificar si hay obstáculos en el camino actual
-        # if self.is_path_blocked():
-        #     self.get_logger().warn("Obstáculo detectado en la ruta planificada. Re-planificando...")
-        #     self.get_map()  # Re-planificar la ruta
-        #     return
+        if self.is_path_blocked():
+            self.get_logger().warn("Obstáculo detectado en la ruta planificada. Re-planificando...")
+            self.get_map()  # Re-planificar la ruta
+            return
 
         # Calcular el ángulo de dirección al punto de mira actual
         dx = current_point[0] - self.robot_pose_x
@@ -666,13 +666,13 @@ class NavigationNode(Node):
         # Actualización del PID
         #self.integral += angle_error * 0.1  # Asumiendo un tiempo de muestreo de 0.1s
         #derivative = (angle_error - self.previous_error) / 0.1
-        #self.previous_error = angle_error
+        #self.previous_error = angle_errorf
         #self.get_logger().info(f"Error integral: {self.integral}, derivativo: {derivative}")
         # Calcular comandos de control
         max_angle_error = math.pi / 2  # Ángulo máximo considerado (90 grados)
         angle_error_normalized = abs(angle_error) / max_angle_error
         linear_speed = self.max_linear_speed * (1 - angle_error_normalized)
-        linear_speed = 0.33
+        linear_speed = 0.52
         angular_speed = (self.kp * angle_error) #+ (self.ki * self.integral) + (self.kd * derivative)
         self.get_logger().info(f"Velocidad angular: {angular_speed}")
         # Limitar la velocidad angular
